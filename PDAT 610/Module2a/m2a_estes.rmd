@@ -1,0 +1,178 @@
+---
+title: "M2A Assignment"
+author: "Andrew Estes"
+date: "8/22/2021"
+output: word_document
+---
+
+##Install Packages
+```{r}
+library(ggpubr)
+library(car)
+library(caret)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(MASS)
+```
+
+##Importing and View Data
+```{r}
+abalone.url <-
+  "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"
+abalone.data <- read.csv(abalone.url, header=FALSE) #data does not have variable names
+abalone.data
+
+summary(abalone.data)
+head(abalone.data)
+```
+
+##1) What is the class of the data abalone.data? (Use class() function)
+```{r}
+class(abalone.data)
+```
+
+
+####Add Column Names to Data Frame
+```{r}
+colnames(abalone.data)[1] <- "sex"
+colnames(abalone.data)[2] <- "length"
+colnames(abalone.data)[3] <- "diameter"
+colnames(abalone.data)[4] <- "height"
+colnames(abalone.data)[5] <- "whole_weight"
+colnames(abalone.data)[6] <- "shucked_weight"
+colnames(abalone.data)[7] <- "viscera_weight"
+colnames(abalone.data)[8] <- "shell_weight"
+colnames(abalone.data)[9] <- "rings"
+
+summary(abalone.data)
+head(abalone.data)
+```
+
+##2) What is the datatype of variable diameter? (Use typeof() function)
+```{r}
+typeof(abalone.data$diameter)
+```
+
+##3) Use the function summary() to find basic description of diameter and age (rings) of abalone.
+```{r}
+summary(abalone.data$diameter)
+```
+```{r}
+summary(abalone.data$rings)
+```
+
+##4) Use the function mean() to find the mean of diameter of female abalone.
+```{r}
+female.abalone=dplyr::filter(abalone.data,sex=='F')
+summary(female.abalone)
+mean(female.abalone$diameter)
+```
+https://rstudio-pubs-static.s3.amazonaws.com/408480_f4bdfd9620c84a9598e512f1a59e66f5.html
+
+
+##5) Assume Y: diameter and X: rings. What is〖(X^' X)〗^(-1) X^' Y ? 
+```{r}
+X <- list(abalone.data$rings)
+Y <- list(abalone.data$diameter)
+Z <- c(X,Y)
+
+abalone.matrix <- matrix(unlist(Z), ncol=2)
+colnames(abalone.matrix) <- c("Rings", "Diameter")
+abalone.matrix
+
+head(abalone.matrix, 2)
+
+t(abalone.matrix) #transposed
+ginv(abalone.matrix) #inverse
+
+```
+
+###6) Can you think of an interesting question about Abalone? 
+First step is to create the male abalone data.
+```{r}
+male.abalone=dplyr::filter(abalone.data,sex=='M')
+```
+
+Now we can run a plots and tests for the data as a whole
+```{r}
+hist(abalone.data$rings)
+
+corLengthAge <- cor.test(abalone.data$length, abalone.data$rings)
+corWeightAge <- cor.test(abalone.data$whole_weight, abalone.data$rings) 
+corHeightAge <- cor.test(abalone.data$height, abalone.data$rings)
+
+covLengthAge <- cov(abalone.data$length, abalone.data$rings)
+covWeighthAge <- cov(abalone.data$whole_weight, abalone.data$rings)
+covHeighthAge <- cov(abalone.data$height, abalone.data$rings)
+
+sd(abalone.data$rings)
+
+scatter.smooth(x=abalone.data$rings, y=abalone.data$whole_weight,
+               xlab = "Rings",
+               ylab = "Whole Weight"
+)
+
+```
+
+Now we can break it down by gender
+```{r}
+Male = abalone.data$rings[which(abalone.data$sex=='M')] 
+Female = abalone.data$rings[which(abalone.data$sex=='F')]
+my.bp <- boxplot(Male,Female,
+                 main = "Number of Rings by Gender",
+                 ylab = "Ages",
+                 names = c("Male", "Female"))
+
+```
+
+
+Here is a predictive model that I copy+pasted and do not fully understand
+```{r}
+malemodel <- lm(rings~length+diameter+height+whole_weight+viscera_weight+shell_weight,data=male.abalone)
+femalemodel <- lm(rings~length+diameter+height+whole_weight+viscera_weight+shell_weight,data=female.abalone)
+
+x <- lm(rings~length,data=male.abalone)
+y <- lm(rings~length,data=female.abalone)
+
+
+set.seed(123)
+age.samples <- abalone.data$rings %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- abalone.data[age.samples, ]
+test.data <- abalone.data[-age.samples, ]
+
+model1 <- lm(rings ~., data = train.data)
+
+predictions <- model1 %>% predict(test.data)
+
+data.frame(
+  RMSE = RMSE(predictions, test.data$rings),
+  R2 = R2(predictions, test.data$rings)
+)
+
+car::vif(model1)
+
+model2 <- lm(rings ~. -whole_weight -viscera_weight -diameter -length, data = train.data)
+#reduced number of variables using correlation/covariance data from the top part of this question
+
+predictions <- model2 %>% predict(test.data)
+
+data.frame(
+  RMSE = RMSE(predictions, test.data$rings),
+  R2 = R2(predictions, test.data$rings)
+)
+
+car::vif(model2)
+```
+http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r#install-and-load-required-r-packages
+https://rstudio-pubs-static.s3.amazonaws.com/408480_f4bdfd9620c84a9598e512f1a59e66f5.html
+http://www.sthda.com/english/articles/39-regression-model-diagnostics/160-multicollinearity-essentials-and-vif-in-r/
+https://github.com/nishitpatel01/predicting-age-of-abalone-using-regression
+
+
+
+
+
+
+

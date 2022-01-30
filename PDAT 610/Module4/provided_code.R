@@ -1,0 +1,122 @@
+#PDAT 610G Module 4 R code
+
+# Don't uncomment, but copy into console if you
+# need to install the package.
+# install.packages("AmesHousing")
+# Load the library.
+library(AmesHousing)
+# Create a copy of the cleaned data.
+ames <- make_ordinal_ames()
+names(ames)
+str(ames)
+summary(ames)
+
+#Histograms 
+prices <-  (ames$Sale_Price/1000)
+hist(prices)
+
+#Mean and median
+mean(prices)
+median(prices)
+
+
+values <- c(119, 103, 108, 105, 370)
+mean(values)
+median(values)
+
+#Option na.rm=TRUE
+x <- c(1, 3, 5, 7, 15, NA)
+mean(x)
+mean(x, na.rm = TRUE)
+
+median(x)
+median(x, na.rm = TRUE)
+
+#Standard deviation
+sd(prices)
+summary(prices)
+
+#Categorical variables
+air.freq <- table(ames$Central_Air)
+air.freq
+
+air.pct <- air.freq/sum(air.freq)
+air.pct
+
+#Bar graphs
+barplot(air.freq,main="AC in Houses Sold")
+
+par(mar=c(5, 6, 4, 2))
+b.freq <- table(ames$Bsmt_Qual)
+barplot(b.freq, horiz=TRUE, las=1, main="Types of Basements")
+
+#Relative frequencies
+barplot(air.pct, main="AC in Houses Sold")
+
+par(mar=c(5, 6, 4, 2))
+b.pct <- b.freq/sum(b.freq)
+barplot(b.pct, horiz=TRUE, las=1, main="Types of Basements")
+
+#Take a random sample
+dbinom(x=9, size=10, prob=0.93)
+pbinom(q=9, size=10, prob=0.93)
+rbinom(n=5, size=10, prob=0.93)
+qbinom(p=.1, size=10, prob=.93)
+
+#A uniformly-distributed variable
+x <- runif(1000,min=0,max=10)
+hist(x)
+
+#All home prices ...
+library(tidyverse)
+one_story <- ames %>%
+  filter(House_Style=="One_Story",
+         Bsmt_Qual=="Good",
+         First_Flr_SF > 1100,
+         First_Flr_SF < 1300) %>%
+  pull(Sale_Price)
+mean(one_story)
+
+sd(one_story)
+
+#WHat percentage?
+p1 <- pnorm(100000, mean=173735.9, sd=25642.01)
+p2 <- pnorm(130000, mean=173735.9, sd=25642.01)
+p2 - p1
+sum(one_story <= 170000 & one_story >= 120000)/length(one_story)
+
+p3 <- pnorm(150000, mean=173735.9, sd=25642.01)
+1 - p3
+sum(one_story > 150000)/length(one_story)
+
+#Using qnorm
+# qnorm gives the bound of a left-tailed area.
+qnorm(0.30, mean=173735.9, sd=25642.01)
+
+# Bounds of lower 5% and lower 95%. Note use of a vector in qnorm.
+qnorm(c(0.05, 0.95), mean=173735.9, sd=25642.01)
+
+#Standardization
+plot(x=ames$Lot_Frontage, y=ames$First_Flr_SF, xlab="Lot Frontage (ft)",
+     ylab="1st Floor Area (sqft)", asp=1)
+
+plot(x=scale(ames$Lot_Frontage), y=scale(ames$First_Flr_SF), xlab="Lot Frontage (ft)",
+     ylab="1st Floor Area (sqft)",asp=1)
+
+#Simulationg a normal distribution
+x <- rnorm(1000, mean=173735.9, sd=25642.01)
+hist(x, main="Simulated Price Data")
+
+
+number_correct <- c(.14, .25, .24, .17, .1, .06, .03, .01, 0, 0, 0, 0)
+answers <- c(1:12)
+number_correct <- number_correct * 100
+
+df <- data.frame(number_correct, answers)
+print(df)
+
+barplot(number_correct ~ answers,
+        horiz = TRUE, 
+        main = "Percentage of Correct Answers", 
+        ylab = "Number of Answers Correct",
+        xlab = "Percentage Correct")

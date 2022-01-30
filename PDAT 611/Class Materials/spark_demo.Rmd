@@ -1,0 +1,149 @@
+---
+title: "Spark on Fire"
+author: "Scott Thatcher"
+date: "4/18/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(sparklyr)
+```
+
+```{r}
+# Connect to the Spark cluster on fire.truman.edu
+sc <- spark_connect(master = "spark://fire.truman.edu:7077")
+```
+
+# Reading Files into R or Spark
+
+There are at least two ways you might store a file for use with Spark:
+
+- On the physical hard drive of each computer. A file must be in the same
+  location on each computer so that all nodes can independently find it.
+  This is cumbersome and uses more disk space.
+  
+- On a distributed file system like the Hadoop file system (hdfs), where it's
+  accessable to all machines in the cluster.
+  
+Both options are demonstrated below. (Point your file browser to /opt/Data
+to see the data files stored there, and follow along with the demonstration
+of the hdfs file system.)
+
+```{r}
+# A file in local storage. (Must be on all computers in the cluster.)
+filename <- "file:///opt/Data/nycflights13.csv"
+# A file on the Hadoop file system.
+hdfs_filename = "hdfs://fire.truman.edu:9000/user/thatcher/nycflights13.csv"
+
+# Read the data into R itself. (Not necessary if you only want to use Spark.)
+flights <- read.csv(filename)
+
+# Copy data from R to Spark. (Note: Not recommended for large data sets.)
+# df_tbl <- copy_to(sc, df)
+
+# Read the data from disk directly into Spark.
+flights_tbl <- spark_read_csv(sc, name="df_tbl", path=hdfs_filename)
+
+```
+
+# Trying a few calculations...
+
+How fast do these commands run in R on fire itself and on the Spark cluster?
+
+```{r}
+system.time({
+  flights %>%
+    mutate(late = as.numeric(arr_delay > 0)) %>%
+    group_by(carrier, dest) %>%
+    summarize(Pct_Late = sum(late)/n()) %>%
+    filter(carrier == "AA")
+})
+```
+
+```{r}
+system.time({
+  flights_tbl %>%
+    mutate(late = as.numeric(arr_delay > 0)) %>%
+    group_by(carrier, dest) %>%
+    summarize(Pct_Late = sum(late)/n()) %>%
+    filter(carrier == "AA")
+})
+```
+
+# Modeling...
+
+```{r}
+system.time({
+  fit <- lm(arr_delay ~ dep_delay + distance + carrier + dest, data=flights)
+})
+```
+
+```{r}
+system.time({
+  fit_spark <-
+    ml_linear_regression(flights_tbl, arr_delay ~ dep_delay + distance + carrier + dest)
+})
+```
+
+# Getting data out of Spark
+
+## The `compute` and `collect` command.
+
+In each command, we start with a Spark data table. Note the difference in the
+two final objects.
+
+### `compute` creates a new Spark table.
+
+```{r}
+summary_tbl <-
+  flights_tbl %>%
+    mutate(late = as.numeric(arr_delay > 0)) %>%
+    group_by(carrier, dest) %>%
+    summarize(Pct_Late = sum(late)/n()) %>%
+    filter(carrier == "AA") %>% compute()
+class(summary_tbl)
+```
+### `collect` transfers data back to a R data frame.
+
+```{r}
+summary_df <-
+  flights_tbl %>%
+    mutate(late = as.numeric(arr_delay > 0)) %>%
+    group_by(carrier, dest) %>%
+    summarize(Pct_Late = sum(late)/n()) %>%
+    filter(carrier == "AA") %>% collect()
+class(summary_df)
+```
+## It's possible to write data directly from Spark to hdfs.
+
+```{r}
+spark_write_csv(flights_tbl %>% filter(carrier=="AA"),
+                path="hdfs://fire.truman.edu:9000/user/thatcher/summary_tbl.csv")
+```
+
+However, one downside is that the data is written in several partial files,
+presumably based on how the data is distributed among the spark nodes.
+This can be overcome, but is outside the scope of this introduction.
+
+To get a single data file, perhaps it's best to `collect` back to R and write
+from there.
+
+```{r}
+write.csv(flights_tbl %>% filter(carrier=="AA") %>% collect(), file="summary.csv")
+```
+
+
+# Disconnect
+
+```{r}
+spark_disconnect(sc)
+```
+

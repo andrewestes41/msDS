@@ -1,0 +1,435 @@
+---
+title: "Module 2A"
+author: "Andrew Estes"
+date: "8/22/2021"
+output: word_document
+---
+
+### Pre-Analysis Set-Up
+##### Installing Packages
+```{r, warning = FALSE, message = FALSE, results='hide'}
+library(ggpubr)
+library(car)
+library(caret)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(MASS)
+library(sensemakr)
+```
+
+
+##### Importing and View Data
+```{r}
+abalone.url <-
+  "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"
+
+abalone.data <- read.csv(abalone.url, header=FALSE) #data does not have variable names
+
+head(abalone.data)
+```
+
+\newpage
+### 1) What is the class of the data abalone.data? (Use class() function)
+```{r}
+class(abalone.data)
+```
+
+\newpage
+##### Data Clean Up
+*Add Column Names to Data Frame*
+```{r}
+colnames(abalone.data)[1] <- "sex"
+colnames(abalone.data)[2] <- "length"
+colnames(abalone.data)[3] <- "diameter"
+colnames(abalone.data)[4] <- "height"
+colnames(abalone.data)[5] <- "whole_weight"
+colnames(abalone.data)[6] <- "shucked_weight"
+colnames(abalone.data)[7] <- "viscera_weight"
+colnames(abalone.data)[8] <- "shell_weight"
+colnames(abalone.data)[9] <- "rings"
+```
+
+*New Output*
+```{r}
+head(abalone.data)
+```
+
+\newpage
+### 2) What is the datatype of variable diameter? (Use typeof() function)
+```{r}
+typeof(abalone.data$diameter)
+```
+
+\newpage
+### 3) Use the function summary() to find basic description of diameter and age (rings) of abalone.
+```{r}
+summary(abalone.data$diameter)
+```
+```{r}
+summary(abalone.data$rings)
+```
+
+\newpage
+### 4) Use the function mean() to find the mean of diameter of female abalone.
+```{r}
+female.abalone <- dplyr::filter(abalone.data,sex=='F')
+mean(female.abalone$diameter)
+```
+https://rstudio-pubs-static.s3.amazonaws.com/408480_f4bdfd9620c84a9598e512f1a59e66f5.html
+
+\newpage
+### 5) Assume Y: diameter and X: rings. What is〖(X^' X)〗^(-1) X^' Y ? 
+```{r}
+x <- abalone.data$rings
+y <- abalone.data$diameter
+
+transposed <- t(x) %*% x
+inversed <- solve(transposed)
+part2 <- t(x) %*% y
+answer <- inversed %*%part2
+answer
+
+```
+
+
+\newpage
+### 6) Can you think of an interesting question about Abalone? 
+I had no real goals for Abalone, but instead chose to take this opportunity to  explore the different packages and capabilities RStudio provides. I ran histograms, side-by-side-by-side box plots, linear regression models, scatter plots of those models, sensitivity analysis of a model, and statistical tests of covariance, correlation, collinearity, and fit of analysis for the regression model. 
+
+The biggest improvement I would make to this section is the output. Instead of having 4 histograms all follwing each other taking up a half a page or even more, I would manipulate the size of the output so all 4 histograms would be on the same page in a 2x2 table. 
+
+*I need to make the data and graphs more readable.* 
+
+The first step in any analysis was to continue the separation of the abalone by sex.  Since the females were previously partitioned, only the males and infants are required 
+
+```{r}
+male.abalone=dplyr::filter(abalone.data,sex=='M')
+indet.abalone=dplyr::filter(abalone.data,sex=='I')
+```
+
+Now we can run a plots and tests for the data as a whole.
+Below is a histogram of the entire data with a focus on the rings, length, weight, and diameter by total data set, male, female, and indeterminate genders.
+```{r}
+hist(abalone.data$rings)
+hist(male.abalone$rings)
+hist(female.abalone$rings)
+hist(indet.abalone$rings)
+```
+
+\newpage
+Here are the histograms of the data focused on length by gender
+```{r}
+hist(abalone.data$length)
+hist(male.abalone$length)
+hist(female.abalone$length)
+hist(indet.abalone$length)
+```
+
+
+\newpage
+Here are the histograms of the data focused on whole weight by gender
+```{r}
+hist(abalone.data$whole_weight)
+hist(male.abalone$whole_weight)
+hist(female.abalone$whole_weight)
+hist(indet.abalone$whole_weight)
+```
+
+
+\newpage
+Here are the histograms of the data focused on diameter by gender
+```{r}
+hist(abalone.data$diameter)
+hist(male.abalone$diameter)
+hist(female.abalone$diameter)
+hist(indet.abalone$diameter)
+```
+
+
+\newpage
+Here are the histograms of the data focused on height by gender
+```{r}
+hist(abalone.data$height)
+hist(male.abalone$height)
+hist(female.abalone$height)
+hist(indet.abalone$height)
+```
+
+\newpage
+After running through some new statistical tests, I went back to last weeks assignment and created a side-by-side boxplot.
+As you can see, there is no real difference in ages based upon gender. 
+This is to be expected as Abalone do not have a natural cannibalistic relationship like the praying mantis or black widow. 
+One thing I would like to expound upon further is the utilization of ggplot2 to increase the color schema for readability.
+
+```{r}
+Male.Rings = abalone.data$rings[which(abalone.data$sex=='M')] 
+Female.Rings = abalone.data$rings[which(abalone.data$sex=='F')]
+Indet.Rings = abalone.data$rings[which(abalone.data$sex=='I')]
+my.bp <- boxplot(Male.Rings, Female.Rings, Indet.Rings,
+                 main = "Number of Rings by Gender",
+                 ylab = "Ages",
+                 names = c("Male", "Female", "Indeterminate"))
+
+```
+
+```{r}
+Male.Length = abalone.data$length[which(abalone.data$sex=='M')] 
+Female.Length = abalone.data$length[which(abalone.data$sex=='F')]
+Indet.Length = abalone.data$length[which(abalone.data$sex=='I')]
+my.bp <- boxplot(Male.Length, Female.Length, Indet.Length,
+                 main = "Length by Gender",
+                 ylab = "Ages",
+                 names = c("Male", "Female", "Indeterminate"))
+
+```
+
+```{r}
+Male.WWeight = abalone.data$whole_weight[which(abalone.data$sex=='M')] 
+Female.WWeight = abalone.data$whole_weight[which(abalone.data$sex=='F')]
+Indet.WWeight = abalone.data$whole_weight[which(abalone.data$sex=='I')]
+my.bp <- boxplot(Male.WWeight, Female.WWeight, Indet.WWeight,
+                 main = "Whole Weight by Gender",
+                 ylab = "Ages",
+                 names = c("Male", "Female", "Indeterminate"))
+
+```
+
+```{r}
+Male.Diameter = male.abalone$diameter
+Female.Diameter = female.abalone$diameter
+Indet.Diameter = indet.abalone$diameter
+my.bp <- boxplot(Male.Diameter, Female.Diameter, Indet.Diameter,
+                 main = "Diameter by Gender",
+                 ylab = "Ages",
+                 names = c("Male", "Female", "Indeterminate"))
+
+```
+
+```{r}
+Male.Height = abalone.data$height[which(abalone.data$sex=='M')] 
+Female.Height = abalone.data$height[which(abalone.data$sex=='F')]
+Indet.Height = abalone.data$height[which(abalone.data$sex=='I')]
+my.bp <- boxplot(Male.Height, Female.Height, Indet.Height,
+                 main = "Height by Gender",
+                 ylab = "Height",
+                 names = c("Male", "Female", "Indeterminate"))
+
+```
+
+\newpage
+Some basic correlation, covariance, and standar deviation calculations
+```{r}
+corLengthAge <- cor.test(abalone.data$length, abalone.data$rings)
+corWeightAge <- cor.test(abalone.data$whole_weight, abalone.data$rings) 
+corHeightAge <- cor.test(abalone.data$height, abalone.data$rings)
+
+covLengthAge <- cov(abalone.data$length, abalone.data$rings)
+covWeighthAge <- cov(abalone.data$whole_weight, abalone.data$rings)
+covHeighthAge <- cov(abalone.data$height, abalone.data$rings)
+
+corLengthAge
+corWeightAge
+corHeightAge
+
+covLengthAge
+covWeighthAge
+covHeighthAge
+
+sd(abalone.data$rings)
+```
+\newpage
+Smooth scatter plot for rings vs whole weight, diameter.
+Smooth scatter plot for whole weight and length vs diameter.
+Smooth scatter plot for length vs height
+```{r}
+scatter.smooth(x=abalone.data$rings, y=abalone.data$whole_weight,
+               xlab = "Rings",
+               ylab = "Whole Weight"
+)
+
+```
+
+```{r}
+scatter.smooth(x=abalone.data$rings, y=abalone.data$diameter,
+               xlab = "Rings",
+               ylab = "Diameter"
+)
+
+```
+
+```{r}
+scatter.smooth(x=abalone.data$whole_weight, y=abalone.data$diameter,
+               xlab = "Whole Weight",
+               ylab = "Diameter"
+)
+
+```
+
+```{r}
+scatter.smooth(x=abalone.data$length, y=abalone.data$diameter,
+               xlab = "Length",
+               ylab = "Diameter"
+)
+
+```
+
+```{r}
+scatter.smooth(x=abalone.data$length, y=abalone.data$height,
+               xlab = "Length",
+               ylab = "Height"
+)
+
+```
+
+```{r}
+scatter.smooth(x=abalone.data$height, y=abalone.data$diameter,
+               xlab = "Length",
+               ylab = "Height"
+)
+
+```
+
+\newpage
+Additional least squares estimation via matrix math.
+Entirely focused on whole weight vs shucked weight, viscera weight, length, diameter, and height. 
+```{r}
+ww.matrix <- abalone.data$whole_weight
+sw.matrix <- abalone.data$shucked_weight
+v.matrix <- abalone.data$viscera_weight
+l.matrix <- abalone.data$length
+d.matrix <- abalone.data$diameter
+h.matrix <- abalone.data$height
+head(abalone.data)
+
+t.ww <- t(ww.matrix) %*% ww.matrix
+inversed.ww <- ginv(ww.matrix)
+part2.sw <- t(ww.matrix) %*% sw.matrix
+answer.sw <- inversed %*%part2.sw
+answer.sw
+```
+
+```{r}
+part2.v <- t(ww.matrix) %*% v.matrix
+answer.v <- inversed %*%part2.v
+answer.v
+```
+
+```{r}
+part2.l <- t(ww.matrix) %*% l.matrix
+answer.l <- inversed %*%part2.l
+answer.l
+```
+
+```{r}
+part2.d <- t(ww.matrix) %*% d.matrix
+answer.d <- inversed %*%part2.d
+answer.d
+```
+
+```{r}
+part2.h <- t(ww.matrix) %*% h.matrix
+answer.h <- inversed %*%part2.h
+answer.h
+```
+
+\newpage
+Linear Regression models
+  Whole weight vs Rings and Diameter
+  Viscera Weight vs Whole Weight and Shell Weight
+  Whole Weight vs Diameter and Height and Length
+```{r}
+lm.ring <- lm(abalone.data$rings ~ abalone.data$diameter)
+lm.ring
+```
+
+```{r}
+lm.vweight <- lm(abalone.data$viscera_weight ~ abalone.data$shell_weight + abalone.data$whole_weight)
+lm.vweight
+```
+
+```{r}
+lm.wweight <- lm(abalone.data$whole_weight ~ 
+                   abalone.data$diameter + 
+                   abalone.data$height + 
+                   abalone.data$length)
+lm.wweight
+```
+
+\newpage
+Testing collinearity using VIF function
+```{r}
+car::vif(lm.wweight)
+```
+
+\newpage
+AOV tests regression fit
+```{r}
+aov(lm.ring)
+```
+
+```{r}
+aov(lm.vweight)
+```
+
+```{r}
+aov(lm.wweight)
+```
+
+\newpage
+Summaries of the three regression tests
+```{r}
+summary(lm.ring)
+```
+
+```{r}
+summary(lm.vweight)
+```
+
+```{r}
+summary(lm.wweight)
+```
+
+\newpage
+Plot of Rings vs Diameter
+```{r}
+plot1 <- plot(abalone.data$rings ~ abalone.data$diameter, data = abalone.data)
+```
+
+Plot of Viscera Weight vs Shell Weight
+```{r}
+plot(abalone.data$viscera_weight ~ abalone.data$shell_weight, data = abalone.data)
+```
+
+Plot of Whole Weight vs Diameter
+```{r}
+plot(abalone.data$whole_weight ~ abalone.data$diameter, data = abalone.data)
+```
+
+Sensitivity analysis
+```{r}
+wweight.sensitivity <- sensemakr(model = lm.wweight, 
+                                treatment = "abalone.data$height",
+                                benchmark_covariates = "abalone.data$diameter",
+                                kd = 1:3,
+                                ky = 1:3, 
+                                q = 1,
+                                alpha = 0.05, 
+                                reduce = TRUE)
+wweight.sensitivity
+```
+
+\newpage
+https://cran.r-project.org/web/packages/sensemakr/vignettes/sensemakr.html
+
+http://faculty.cas.usf.edu/mbrannick/regression/regma.htm
+
+https://escholarship.org/content/qt2k89z4z7/qt2k89z4z7_noSplash_79a83593875d17076c19b260e6c60fd4.pdf
+
+http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r#install-and-load-required-r-packages
+
+https://rstudio-pubs-static.s3.amazonaws.com/408480_f4bdfd9620c84a9598e512f1a59e66f5.html
+
+http://www.sthda.com/english/articles/39-regression-model-diagnostics/160-multicollinearity-essentials-and-vif-in-r/
+
+https://github.com/nishitpatel01/predicting-age-of-abalone-using-regression

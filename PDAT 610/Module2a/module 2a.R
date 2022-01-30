@@ -1,0 +1,125 @@
+#PDAT 610G Module 2 R code
+
+#R as a Calculator and an Assignor
+x <- 3  # the variable x is assigned a value of 3
+x 	   # not very exciting display
+y <- x ^2  #y is assigned to the value of x squared
+x + y
+sqrt(16)
+
+#RStudio: Atomic Object Classes and Coercion
+x <- 0:3
+x
+class(x)
+as.logical(x)
+as.character(x)
+
+#Vectors
+x <- c("a", "b", "c", "d", "e", "a")
+y <- c(1, 2, 4, -2, 8)
+z <- c(TRUE, FALSE, FALSE, TRUE)
+x[1]  #displays the first element of a vector
+x[1:3]
+
+#Lists
+x <- list(a=c(1, 2, 3), b=c(TRUE, FALSE, TRUE), c=c("dog", "monkey", "cat"))  # a list
+x     # accessing the list
+
+#Matrices
+x <- c(1, 2, 3, 4)
+y <- c("Robert", "Sally", "Nancy", "Steve")
+z <- c("Sophomore", "Junior", "Junior", "Senior")
+w <- c(48, 53, 62, 39)
+thing1 <- data.frame(x,y,z,w)
+thing1
+
+#Data Frames
+x <- c(1, 2, 3, 4)
+y <- c("Robert", "Sally", "Nancy", "Steve")
+z <- c("Sophomore", "Junior", "Junior", "Senior")
+w <- c(48, 53, 62, 39)
+thing1 <- data.frame(x,y,z,w)
+thing1
+
+#Array
+z <- array(1:12, c(2, 3, 2))    
+z
+
+#Factors
+z <- c("Sophomore", "Junior", "Junior", "Senior")
+z <- as.factor(z)
+z
+
+#Ordered Factors
+z_oops <- as.ordered(z)
+z_oops
+z_Ordered <- factor(z, ordered = TRUE, levels = c("Freshman", "Sophomore", "Junior", "Senior"))
+z_Ordered
+
+#Understanding Classes
+class(w)  #really a vector, but a numeric vector
+class(z)
+class(z_Ordered)
+class(thing1)
+
+#Missing Values
+a <- c(4, NA, 27, 32, FALSE)
+a
+class(a)
+is.na(a)
+
+#BaseR: Subsetting with Brackets
+y <- c("Robert", "Sally", "Nancy", "Steve")
+y[1]
+y[2:4]
+thing1[2]
+
+#BaseR: Subsetting with [[ ]] and $
+thing1[[2]] #how is this different than thing1[2]?
+thing1$y  #same as thing1[[2]]
+thing1$w
+
+#BaseR: More Subsetting with [ ], [[ ]], and $
+thing1[2,2]   #single point from a data.frame
+thing1[[2,2]] #same as single brackets
+thing1[2,]   #calls an entire row of data.
+thing1[,2]  #calls an entire row. Same as thing1$y  
+
+#Vectorized Operations
+x <- c(1, 2, 3, 4)
+x^2
+w <- c(48, 53, 62, 39)
+sqrt(w)
+x * w
+
+#Vectorized Operations on Matrices
+m <- cbind(w,x)
+m2 <- matrix(1:8, ncol=2)
+m + m2
+m * m2  #piecewise
+m/m2
+
+#Vectorized Operations on Matrices, part 2
+m <- cbind(w,x)
+m2 <- matrix(1:8, ncol=2)
+m %*% t(m2)
+
+# Importing Datasets
+abalone.url <-
+  "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"
+abalone.data <- read.csv(abalone.url, header=FALSE) #data does not have variable names
+names(abalone.data) <- c("sex", "length", "diameter",
+                         "height", "weight.whole", "weight.shucked",
+                         "weight.viscera", "weight.shell", "rings")
+
+#Importing Datasets 2
+abalone.clean <- read.csv("U:/_MT Student File Area/Alberts/DataRepo/abalone_clean.csv")
+library(readr)
+abalone_clean <- read_csv("U:/_MT Student File Area/Alberts/DataRepo/abalone_clean.csv")
+
+#Saving and Exporting Datasets
+abalone.clean <- read.csv("U:/_MT Student File Area/Alberts/DataRepo/abalone_clean.csv")
+write.csv(abalone.clean, "abalone.csv")
+
+library(readr)
+write_csv(abalone.clean, "abalone.csv")

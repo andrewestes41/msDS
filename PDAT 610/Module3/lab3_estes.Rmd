@@ -1,0 +1,81 @@
+---
+title: "lab3_estes"
+author: "andrew.estes"
+date: "9/11/2021"
+output: pdf_document
+---
+
+Install Data and Packages
+```{r}
+#install.packages("AmesHousing")
+#tinytex::install_tinytex()
+library(AmesHousing)
+library(tidyverse)
+library(tinytex)
+AmesData <- make_ames()
+#view(AmesData)
+#str(AmesData)
+```
+
+Create a new column in the AmesData data frame which has a value of 1 if the house is built in year 2000 or later or 0 if it is built before year 2000 using the following method:
+1) IF-ELSE
+2) FOR
+3) SAPPLY
+4) Question 3 - Question 1
+
+\newpage
+## 1) ifelse(name this column – w3ifelse). What is the first 10 elements of w3ifelse?
+```{r}
+AmesData2 <- AmesData %>% 
+  select(Year_Built) %>%
+  mutate(w3ifelse = ifelse(Year_Built > 1999, 1, 0))
+
+head(AmesData2, 10)
+view(AmesData2)
+```
+
+\newpage
+## 2) if-Else and a For loop (name this column – w3for). What is the first 10 elements of w3for?
+```{r}
+AmesData3 <- AmesData2
+
+
+  w3for = for (i in 1:nrow(AmesData3)){
+    if(AmesData3$Year_Built[i] < 2000){
+        AmesData3$Year_Built[i] <- 0
+    } else {
+        AmesData3$Year_Built[i] <- 1
+    }
+  }
+
+head(AmesData3, 10)
+```
+
+\newpage
+## 3) Build your own function and use sapply (name this column - w3apply). What is the first 10 elements of w3apply?
+```{r}
+woo <- function(x){
+  if(is.na(x)) return(x)
+  else if (x <= 1999) return (0)
+  else return (1)
+}
+
+AmesData4 <- AmesData2 %>% 
+  select(Year_Built, w3ifelse) %>%
+  mutate(w3apply = sapply(AmesData2$Year_Built, woo))
+         
+head(AmesData4)
+
+```
+
+\newpage
+## 4)	Create a column w3diff which is the difference of the two columns w3ifelse and w3apply. 
+DO NOT use a for loop or the apply set of functions for this step. Simple subtraction will work. 
+What is the total sum of this column? 
+```{r}
+AmesDataFinal <- AmesData4 %>%
+  mutate(w3diff = w3apply - w3ifelse)
+
+head(AmesDataFinal, 10)
+```
+

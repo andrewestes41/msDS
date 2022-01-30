@@ -1,0 +1,130 @@
+---
+title: "lab2b_estes"
+author: "Andrew Estes"
+date: "9/5/2021"
+output: word_document
+---
+
+#### Installing Packages and Data Set
+```{r}
+library(tidyr)
+library(tidyverse)
+kim <- read.csv("C:\\Users\\andre\\OneDrive\\Desktop\\PDAT 610\\Module2b\\Clean-KimData.csv")
+head(kim)
+```
+
+
+## Question 1: Select "male" OR "first year" and compare to "male AND first year" 
+#### Answer: there were 229 observations of "male" OR "first year" compared to 43 observations of "male AND first year" 
+```{r}
+maleORfirst <- filter(kim, Semester < 2 | Gender == "M" )
+count(maleORfirst)
+```
+
+\newpage
+## Question 2: Calculate BMI 
+```{r}
+#adding numerical BMI to the dataframe
+kimBMI <- mutate(kim, BMI = 703 *(Weight/(h=Height^2)))
+
+#adding categorical TRUE/FALSE determining status of obese to dataframe
+kimData <- mutate(kimBMI, Obese = BMI > 30)
+head(kimData)
+```
+
+\newpage
+## Question 3: Calculate BMI for each year
+```{r}
+#dividing the semeesters into 2 to calculate the year
+#adding 1 to the calculation so Freshman are Year 1 instead of Year 0
+kimData2 <- kimData %>% 
+  mutate(Year = round(Semester/2)+1)
+head(kimData2)
+
+#grouping the obesity rates by Year
+df <- kimData2 %>% group_by(Year)
+df %>% summarise (
+          avg = mean(BMI, na.rm = TRUE)
+)
+```
+
+\newpage
+## Question 4: Calculate the obesity percentage for each year
+```{r error = TRUE}
+#dr kim's answer
+KimData <-kimData2 %>% 
+  mutate(BMI=703*(Weight/Height^2))%>%
+  mutate(Obese=BMI>=30) %>%
+  mutate(Year = round(Semester/2))%>%
+  group_by(Year) %>% 
+  
+  #filtering obesity by year
+firstYearObese <- filter(df, Year == 1 & BMI > 30)
+secondYearObese <- filter(df, Year == 2 & BMI > 30)
+thirdYearObese <- filter(df, Year == 3 & BMI > 30)
+fourthYearObese <- filter(df, Year == 4 & BMI > 30)
+fifthYearObese <- filter(df, Year == 5 & BMI > 30)
+sixthYearObese <- filter(df, Year == 6 & BMI > 30)
+
+
+  #filtering data by year
+firstYear <- filter(df, Year == 1)
+secondYear <- filter(df, Year == 2)
+thirdYear <- filter(df, Year == 3)
+fourthYear <- filter(df, Year == 4)
+fifthYear <- filter(df, Year == 5)
+sixthYear <- filter(df, Year == 6)
+
+  #dividing total number of obesity/yr by total respondents/yr
+obeseFirstYr <- count(firstYearObese)/count(firstYear)
+obeseSecondYr <- count(secondYearObese)/count(secondYear)
+obeseThirdYr <- count(thirdYearObese)/count(thirdYear)
+obeseFourthYr <- count(fourthYearObese)/count(fourthYear)
+obeseFifthYr <- count(fifthYearObese)/count(fifthYear)
+obeseSixthYr <- count(sixthYearObese)%/%count(sixthYear)
+
+  #output of the above division
+obeseFirstYr 
+obeseSecondYr
+obeseThirdYr
+obeseFourthYr
+obeseFifthYr
+obeseSixthYr
+```
+
+\newpage
+## Question 5: Analyze feet size by gender
+#### Answer: I removed all observations over 2 standard deviations away from the mean
+#### The male average drops from an initial value of 11.51 to 10.81
+#### The male sd drops from an initial value 8.19 to 1.31
+  
+#### The female average drops from an initial value of 7.99 to 7.96
+#### The female SD drops from an initial value 1.33 to 1.17
+```{r}
+#male analysis
+maleDF <- filter(df, Gender == "M")
+mean(maleDF$Shoe.Size, na.rm = TRUE)
+sd(maleDF$Shoe.Size, na.rm = TRUE)
+
+maleDF2 <- filter(maleDF, Shoe.Size < 20)
+mean(maleDF2$Shoe.Size, na.rm = TRUE)
+sd(maleDF2$Shoe.Size, na.rm = TRUE)
+
+maleDF3 <- filter(maleDF2, Shoe.Size > 7.86 & Shoe.Size < 13.9)
+mean(maleDF3$Shoe.Size, na.rm = TRUE)
+sd(maleDF3$Shoe.Size, na.rm = TRUE)
+
+
+#female analysis
+femaleDF <- filter(df, Gender == "F")
+mean(femaleDF$Shoe.Size, na.rm = TRUE)
+sd(femaleDF$Shoe.Size, na.rm = TRUE)
+
+femaleDF2 <- filter(femaleDF, Shoe.Size > 5.33 & Shoe.Size < 10.65)
+mean(femaleDF2$Shoe.Size, na.rm = TRUE)
+sd(femaleDF2$Shoe.Size, na.rm = TRUE)
+```
+
+
+
+

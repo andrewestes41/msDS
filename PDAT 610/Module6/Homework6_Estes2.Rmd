@@ -1,0 +1,55 @@
+---
+title: "Homework 6"
+author: "Andrew Estes"
+date: "9/26/2021"
+output: pdf_document
+---
+
+Install dataset and libraries
+```{r}
+library(tinytex)
+library(AmesHousing)
+library(tidyverse)
+Ames <- make_ames()
+```
+
+# 1
+Make a boxplot between Sale Price and Overall Condition
+```{r}
+p <- ggplot(Ames, aes(Sale_Price/1000, Overall_Cond))
+p + geom_boxplot()
+```
+Typically overall condition correlates to price 
+The Average boxplot is different due to several outliers on the higher end
+This indicates that there is another factor influencing price within the average class
+
+# 2
+a) Make a jitter plot
+b) Does Year Built or Lot Area impact Sales Price more? 
+c) Make your own plot analyzing a variable's impact on Sale Price
+d) Write about your findings
+```{r}
+#Part A
+d <- p + geom_jitter(aes(colour = Year_Built)) + 
+          labs(title="Plot of Price by Condition and Year Built and Lot Size",x="Sale Price in Thousands", y = "Overall Condition Rating") +
+          theme(axis.text.x = element_text(angle=90, hjust=1)) +
+          scale_x_continuous(breaks=seq(0, 900, by=100))
+z <- d + coord_flip()
+t <- z + geom_jitter(aes(size = Lot_Area))
+t <- t + stat_summary(fun = median, geom="point", shape=18, size=3, color="red")
+t
+```
+Year Built impacts the Sales Price for the Average Condition more than the Lot Area does
+
+
+
+```{r}
+#Part C
+a <- ggplot(data = Ames) +
+  geom_boxplot(mapping = aes(x=reorder(Neighborhood, Sale_Price/1000, na.rm = TRUE), y = Sale_Price/1000)) +
+  theme(axis.text.x = element_text(angle=0, hjust = 1)) +
+  labs(title="Plot of Price by Neighborhood",x="Sale Price in Thousands", y = "Neighborhood")
+a <- a + coord_flip()
+a
+```
+Location, location, location! Where you live is often the greatest indicator of sales price. The average rent for a 740 sqft apartment in San Francisco is over 3000 dollars/month according to rentcafe.com. Similarly, a 760 sqft apartment in Des Moines costs less than 1000 dollars per month. Similary, in Ames, the average house price in in North Ridge is over 250k meanwhile in down in Meadow Village that figure drops to less than 100k. A 2.5x difference. 

@@ -1,0 +1,60 @@
+---
+title: "Homework Module 3 - Assignment 2"
+author: "Andrew Estes"
+date: "11/12/2021"
+output: pdf_document
+---
+# Question 1.
+> The link for data published by the US Government is http://www.data.gov.  
+Browse the site and be on the lookout for CSV files
+“Comma separated values” (CSV) files are text files and they can be 
+imported into Excel and/or processed via the many standard text processing tools.  
+Under “finance” are found many data sets of interest.   The file FRB_HR15.csv, 
+included in this assignment folder, was downloaded from that site and provides
+daily Treasury note yield quote data over decades.  
+Column J contains the 10-year note yield.  Use any of the many tools at your 
+disposal and plot a line chart of those 10-year note yields.
+When you have finished, please take a screenshot of your results and upload them to this assignment, or provide me with a hyperlink to your results. 
+
+```{r, message=FALSE, error=FALSE, warning=FALSE}
+###this code can help remove NAs when changing the date column data from character
+### to date
+
+#lct <- Sys.getlocale("LC_TIME"); Sys.setlocale("LC_TIME", "C")
+#Sys.setlocale("LC_TIME", lct)
+#install.packages("jsonlite")
+
+###this code installed relevant libraries and imported the dataset
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(jsonlite))
+suppressPackageStartupMessages(library(ggplot2))
+
+df <- read.csv("FRB_H15.csv")
+df <- as_tibble(df)
+```
+
+
+```{r, message=FALSE, error=FALSE, warning=FALSE}
+###this code cleaned up the data by changing the column names and by removing
+###non-useful data
+
+names(df)[10] <- "TenYear"
+names(df)[1] <- "Date"
+df <- df[-c(1:5), ]
+df <- subset(df, df$TenYear != "ND")
+```
+
+
+```{r}
+###this code made the date go from character to data 
+###it also made the TenYear data go from character to numeric
+###finally we created the lineplot showing the 10-Year Treasury Yields over time
+df$Date <- as.Date(df$Date, format = "%Y-%m-%d")
+df$TenYear <- as.numeric(df$TenYear)
+ggplot(data=df, aes(x=Date, y=TenYear)) +
+  geom_line()
+```
+
+The line-plot created by GGPlot2 clearly shows a rise in the ten-year treasury yield that corresponds with reccessions. In 1970 there was an oil crisis leading to a minor recession and a doubling of the initial 10-year rates as of 1960. 
+In 1980, there was another recession (futher reading here: [link](https://bancroft.berkeley.edu/ROHO/projects/debt/1980srecession.html)) that once again doubled treasury yield rates from 1970's 8% to nearly 16% in 1980. 
+There were some small recessions in the 1990's explaining the constant switchbacks. Things increased aroudn the time of the Great Recession and have tapered off since as the economy has surged forward with little-to-no setbacks in the past decade. 

@@ -1,0 +1,57 @@
+#PDAT 610 Module 2b R code
+
+#Tydyverse packages
+install.packages("tidyverse")
+library(tidyverse)
+library(dplyr)
+
+#Aside: AmesHousing Data Set
+install.packages("AmesHousing")  #only once
+library(AmesHousing)
+?make_ordinal_ames
+Ames <- make_ordinal_ames ()
+
+#filter: Choose individuals (rows) that meet a certain criterion.
+AmesNew <- filter(Ames, `Year_Built` > 1990)
+AmesAC <- filter(Ames, `Central_Air` == "Y")
+AmesPool <- filter(Ames, Pool_QC != "No_Pool")
+
+#Aside: Defining logical criteria.
+AmesPosh <- 
+  filter(Ames, Pool_QC != "No_Pool" & Kitchen_Qual == "Excellent")
+AmesNiceKitchen <-
+  filter(Ames, Kitchen_Qual == "Excellent" | Kitchen_Qual =="Good")
+
+#arrange: Sort individuals (rows) according to a certain criterion.
+AmesOld <- arrange(Ames, Year_Built)
+AmesCheap <- arrange(Ames, Sale_Price)
+AmesExpensive <- arrange(Ames, desc(Sale_Price))
+
+#select: Choose only certain variables
+AmesSkinny <- 
+  select(Ames, Year_Built, Sale_Price, Gr_Liv_Area)
+AmesAllButPrice <- select(Ames, -Sale_Price)
+AmesSF <- select(Ames, contains("SF"))
+
+
+#mutate: Create a new variable
+AmesThousands <- 
+  mutate(Ames, Sale_Price_K = Sale_Price/1000)
+AmesAcre <- mutate(Ames, 
+                     Lot_Size_Acre = Lot_Area/43560)
+AmesBig<- mutate(Ames, BigHouse=Gr_Liv_Area >2500)
+
+#Aside: Pipes Example
+AmesChain <- Ames %>%
+  mutate(Baths = Full_Bath + Half_Bath/2) %>%
+  filter(Baths > 2 
+         & Central_Air == "Y" 
+         & Year_Built > 1990
+         & Sale_Price < 400000) %>%
+  arrange(desc(Sale_Price))
+
+#group_by: identify subgroups of interest
+AmesGroup <- group_by(Ames, Kitchen_Qual)
+AmesGroup <- Ames %>%
+  group_by(Kitchen_Qual)
+

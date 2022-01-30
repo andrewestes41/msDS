@@ -1,0 +1,130 @@
+#PDAT 610G Module 3 code
+
+#Function-Example
+sum_of_squares <- function(x, y){
+  return(x^2 + y^2)
+}
+sum_of_squares(3, 4)
+
+#Function-Example
+mean_of_vector<- function(avector){
+  s<-sum(avector)
+  x<-s/length(avector)
+  return(x)
+}	
+mean_of_vector(c(1,2,3,4,5))
+
+# Practice  Answer
+summarystat<-function(vector) {
+  a<-c(min(vector), max(vector), sum(vector), mean(vector))
+  return(a) 
+}
+summarystat(c(1,3,5,7,9,6))
+
+#Conditional Statements
+1==1                     
+c(1,2) == c(1,3) 
+1==1 & 2==2
+
+# Example conditional statement
+a <- 1:5  
+b <- c(2,4,6,8,10) 
+a[1] == 1
+a[1] > 2 & b[1] > 3
+a[1] != 2 | b[1] > 3
+a < 2 & b > 3
+a < 2 | b > 3
+a < 2 && b < 3
+
+# If-Else Example
+score <- 72
+if (score > 70) {
+  grade = "A"
+} else if (score < 40) {
+  grade = "F"
+} else {
+  grade = "B"
+}
+grade
+
+#Vectorized ifelse
+x <- c(72, 96, 20)
+ifelse(x > 70, "Pass", "Fail")
+
+# For
+for (i in 1:10) {
+  print(i)
+}
+
+#Nested For: 
+x <- matrix(1:9, 3, 3)
+x
+x <- matrix(1:9, 3, 3)
+for(i in seq_len(nrow(x))) {
+  for(j in seq_len(ncol(x))) {
+    print(x[i, j])
+  }
+}
+
+#While
+count <- 1
+while(count <= 10) {
+  print(count)
+  count <- count + 1
+}
+
+#Repeat and break
+repeat {
+  x <- rnorm(1, 0, 1)
+  print(x)
+  if(x < 0){ break }
+}
+
+#apply
+x <- matrix(seq(1, 25), 5, 5)
+apply(x, 1, max)    #   print maximum values in each row
+apply(x, 2, min)    #   print minimum values in each column
+
+#lapply
+x <- list(a = 1:3, b = 4:16, c = 10:15)
+x
+lapply(x, FUN = length)
+
+#sapply
+x <- list(a = 1:3, b = 4:16, c = 10:15)
+x
+sapply(x, FUN = length)
+
+#mapply
+x<- matrix(seq(1, 25), 5, 5)
+apply(x, 1, sum) 
+mapply(sum, 1:5, 6:10,11:15, 16:20,21:25)
+
+#Operators
+install.packages("titanic")
+library(titanic)
+data(titanic_train)
+str(titanic_train)
+
+# Operators - Example
+titanic_train$vect_if <- ifelse(titanic_train$Age <=18, 1, 0)
+
+# Operators - Example
+for(i in 1:nrow(titanic_train))
+{
+  if(is.na(titanic_train$Age[i])){
+    titanic_train$for_if[i] <- NA
+  } else if(titanic_train$Age[i] <= 18){
+    titanic_train$for_if[i] <- 1
+  } else
+    titanic_train$for_if[i] <- 0
+}
+
+# Operators - Example
+age_minor<-function(x){
+  if(is.na(x)) return(x)
+  else if (x<=18) return (1)
+  else return(0)
+}
+titanic_train$sap_if<-sapply(titanic_train$Age, age_minor)
+

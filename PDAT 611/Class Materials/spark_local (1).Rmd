@@ -1,0 +1,293 @@
+---
+title: "Local Spark Introduction"
+author: "Scott Thatcher"
+date: "4/18/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Installing Spark Locally
+
+If you haven't done so already, you can install the `sparklyr` package,
+then use the `install_spark` command to install spark locally on your computer.
+Note: They are commented out in this file to remind you not to install
+them every time you might run the code. Copy into the console and run once!
+
+```{r}
+# install.packages("sparklyr")
+# Note: You could go with the default version, but previous versions only
+# work with Java 8. So, depending on the version of Java you have installed,
+# you may need a later version.
+# spark_install(version="3.1")
+```
+
+```{r}
+library(sparklyr)
+library(nycflights13)
+library(tidyverse)
+```
+
+# Making a Connection from R to Spark
+
+The `spark_connect` command creates the connection from R to Spark. This can be
+of various forms:
+
+- master="local" to use the locally-installed Spark from `spark_install`.
+
+- master="spark://fire.truman.edu:7077" (for example) to connect to a
+  free-standing spark server.
+
+- master="yarn" to connect to a yarn server, etc.
+
+By default the local Spark installation will run code that uses all cores on
+your computer, which might give performance increases over running R on a 
+single core (there are also other ways to get R to parallelize its code,
+without using Spark).
+
+```{r}
+sc <- spark_connect(master="local")
+```
+
+# Getting Data into Spark
+
+Two commands that can be used to read data into Spark are
+
+- `copy_to` from the `dplyr` package, which reads an in-memory data frame
+  into Spark, and 
+
+- `spark_read_csv` from `sparklyr`, which reads data straight from storage
+  into Spark.
+  
+The `copy_to` command is useful, but is not suitable for very large data sets.
+
+In this section, we'll use the 2013 New York flight data from the `nycflights13`
+package as a starting point. 
+
+```{r}
+# Note that the `sparklyr` commands don't like NA's, so we'll just use na.omit.
+# In a real analysis, you'd want to be more careful about how many NA's you're
+# removing and whether there's any systematic reason you're getting NA's.
+
+flights <- nycflights13::flights %>%
+  mutate(carrier=factor(carrier)) %>% mutate(dest=factor(dest)) %>% na.omit()
+
+# copy_to needs the connection (sc in this case), and the R data frame.
+
+flights_tbl <- copy_to(sc, flights)
+```
+
+# Data Manipulation with `dplyr`
+
+The `flights_tbl` object is of class `tbl_spark`--not a data frame.
+
+```{r}
+class(flights_tbl)
+```
+
+However, `dplyr` verbs have methods that know how to accommodate these spark
+tables, making it easy to use Spark to do the same things you'd normally do with
+R data frames.
+
+Suppose we want to answer the question "For each carrier and each destination,
+what percentage of flights were late in arriving?"
+
+Let's compare R and Spark.
+
+## Regular R
+
+In regular R, we might mutate to create a 0/1 variable denoting late arrival,
+group by carrier and destination, then summarize to calculate percentages.
+
+```{r}
+# At the end, we filter to pick out American Airlines, just to get smaller
+# output.
+flights %>% 
+  mutate(late = (arr_delay > 0)) %>%
+  group_by(carrier, dest) %>%
+  summarize(Pct_Late = sum(late)/n()) %>%
+  filter(carrier == "AA")
+```
+
+## Spark
+
+When starting with a Spark table, the commands look the same, but behind the 
+scenes, something different is happening. The data has already been loaded
+into spark, and the `dplyr` commands create the code to tell Spark what to do,
+then bring the results back to R at the end of the pipe. So, all computation
+is done in Spark, and only the small final data set is returned to R.
+
+```{r}
+flights_tbl %>%
+  mutate(late = (arr_delay > 0)) %>%
+  group_by(carrier, dest) %>%
+  summarize(Pct_Late = sum(late)/n()) %>%
+  filter(carrier == "AA")
+```
+
+Hey, this didn't work! There are some differences between evaluation in R and
+evaluation in Spark's environment. Among the errors was this message:
+
+> `data type mismatch: function sum requires numeric types, not boolean`
+
+An application of `as.numeric` fixes this problem, but it's good to be aware
+that there are differences in how you might have to write code.
+
+```{r}
+flights_tbl %>%
+  mutate(late = as.numeric(arr_delay > 0)) %>%
+  group_by(carrier, dest) %>%
+  summarize(Pct_Late = sum(late)/n()) %>%
+  filter(carrier == "AA")
+```
+
+## Timing Comparison
+
+The commands we've used can be parallelized--breaking the data set into pieces,
+doing the calculations on each piece, then recombining them. But did using
+Spark save any time in this case over doing the computation in R? Here are the
+differences:
+
+- R holds the entire data set in memory at once and does the computation on
+  a single processor core, unless you use other R packages to do parallel
+  computation.
+  
+- Spark can parallelize, but there is overhead in sharing data and coordination.
+
+Wrapping the commands in the `system.time` command can measure the elapsed
+time for both sets of commands. It's good to run the commands more than once
+so that any first-time slow-down related to loading the data into working
+memory doesn't take away from estimates of how fast the computations run.
+
+```{r}
+# Note that code blocks inside `system.time` need to be wrapped in { ... }.
+system.time({
+  flights %>%
+    mutate(late = as.numeric(arr_delay > 0)) %>%
+    group_by(carrier, dest) %>%
+    summarize(Pct_Late = sum(late)/n()) %>%
+    filter(carrier == "AA")
+})
+```
+
+```{r}
+system.time({
+  flights_tbl %>%
+    mutate(late = as.numeric(arr_delay > 0)) %>%
+    group_by(carrier, dest) %>%
+    summarize(Pct_Late = sum(late)/n()) %>%
+    filter(carrier == "AA")
+})
+```
+
+At least on my computer, Spark takes 10 times longer! In this case, it looks
+like the overhead of starting the process overwhelms any benefit from
+possible parallelization. Perhaps 300,000 rows isn't big enough in this 
+context?
+
+# Graphing
+
+Results of a Spark calculation can be used to visualize your data, but the
+important thing to remember is that you need to pre-compute whatever is fed
+into `ggplot` or other graphing commands.
+
+For example, with a regular R data frame, you might let `ggplot` do the
+work in computing percentages, but using `position="fill"`.
+
+```{r}
+flights %>%
+  mutate(late = (arr_delay > 0)) %>%
+  filter(carrier == "AA") %>%
+  ggplot() +
+  geom_bar(aes(x=dest, fill=late), position="fill")
+```
+
+But if you're using `sparklyr`, you'll need to do the computation of percentages
+in Spark itself before feeding the result into `ggplot`:
+
+```{r}
+flights_tbl %>%
+  mutate(late = as.numeric(arr_delay > 0)) %>%
+  group_by(carrier, dest) %>%
+  summarize(Pct_Late = sum(late)/n()) %>%
+  filter(carrier == "AA") %>%
+  ggplot() +
+  geom_col(aes(x=dest, y=Pct_Late))
+```
+
+# Modeling
+
+Like R, Spark has libraries for various statistical and machine learning tasks.
+The `sparklyr` package provides commands to interface with those packages.
+Unlike `dplyr` commands, these modeling commands might look different.
+
+## Linear Regression
+
+For example, suppose you wished to predict arrival delay, based on departure
+delay, distance of the flight, carrier and destination airport. (Note: I
+don't claim this is a great set of variables, but it's chosen here to 
+provide a somewhat time-consuming calculation.)
+
+Here's the regular R code:
+
+```{r}
+fit <- lm(arr_delay ~ dep_delay + distance + carrier + dest, data=flights)
+summary(fit)
+```
+
+Here are the `sparklyr` modeling commands, all of which start with `ml`, for
+"machine learning."
+
+```{r}
+fit_spark <-
+  ml_linear_regression(flights_tbl, arr_delay ~ dep_delay + distance + carrier + dest)
+summary(fit_spark)
+```
+
+The output looks a bit different, but if we define a fictitious American
+Airlines flight to Kansas City, you can see they give the same result:
+
+```{r}
+newflight <-
+  data.frame(carrier="AA", dest="MCI", origin="JFK", distance=1113, dep_delay=0)
+newflight_tbl <- copy_to(sc, newflight)
+predict(fit, newdata=newflight)
+# This seems to work...
+predict(fit_spark, newdata=newflight_tbl)
+# This is the "native" command...
+ml_predict(fit_spark, dataset=newflight_tbl)
+```
+
+## Timing
+
+Let's look at the timing of each command:
+
+```{r}
+system.time({
+  fit <- lm(arr_delay ~ dep_delay + distance + carrier + dest, data=flights)
+})
+```
+
+```{r}
+system.time({
+  fit_spark <-
+    ml_linear_regression(flights_tbl, arr_delay ~ dep_delay + distance + carrier + dest)
+})
+```
+
+On my computer, timings are closer, but Spark is still not faster!
+
+# Disconnection
+
+It's important to disconnect from Spark when you're done. Although the 
+disconnection should also happen if you quit R, it's good manners to
+do it yourself.
+
+```{r}
+spark_disconnect(sc)
+```
+

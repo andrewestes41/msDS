@@ -1,0 +1,29 @@
+
+#lct <- Sys.getlocale("LC_TIME"); Sys.setlocale("LC_TIME", "C")
+#Sys.setlocale("LC_TIME", lct)
+#install.packages("jsonlite")
+
+library(tidyverse)
+library(jsonlite)
+library(ggplot2)
+df <- read.csv("FRB_H15.csv")
+df <- as_tibble(df)
+
+#colnames(df)
+names(df)[10] <- "TenYear"
+names(df)[1] <- "Date"
+df <- df[-c(1:5), ]
+df <- subset(df, df$TenYear != "ND")
+view(df)
+
+df$Date <- as.Date(df$Date, format = "%Y-%m-%d")
+view(df)  
+df$TenYear <- as.numeric(df$TenYear)
+
+typeof(df$TenYear)
+class(df$TenYear)
+
+ggplot(data=df, aes(x=Date, y=TenYear)) +
+  geom_line()
+
+

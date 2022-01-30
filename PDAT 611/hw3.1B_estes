@@ -1,0 +1,36 @@
+---
+title: "hw3.1B_estes"
+author: "Andrew Estes"
+date: "11/8/2021"
+output: pdf_document
+---
+
+```{r}
+library(dplyr)
+M <- 120000
+biglist <- tibble(ID = seq(1,M),
+     oops=c(rnorm(M, mean=0, sd=1)),
+     IDSum = (ID + oops))
+write.csv(biglist, "biglist.csv")
+df <- read.csv("biglist.csv")
+tail(df, 9)
+```
+Using R to read the CSV is far quicker than Google Sheets. 
+It takes roughly the same time as it does Excel, however, 
+being able to access the data directly certainly gives R the edge.  
+
+Now to try 1.2 Million results...
+```{r}
+M <- 1200000
+biglist <- tibble(ID = seq(1,M),
+     oops=c(rnorm(M, mean=0, sd=1)),
+     IDSum = (ID + oops))
+write.csv(biglist, "biglist1M.csv")
+df <- read.csv("biglist1M.csv")
+tail(df, 9)
+```
+Interestingly enough, CSV won't allow 1.2 million results. 
+My results ended at 1,048,576 in excel but reached the full 1.2 million via R.
+I didn't even try google sheets due to the cumbersome use for just 12 observations.
+
+
