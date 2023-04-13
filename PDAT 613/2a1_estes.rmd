@@ -1,0 +1,177 @@
+---
+title: "2a1_estes"
+author: "Andrew Estes"
+date: "1/9/2022"
+output: pdf_document
+---
+
+## 1) Create a scatter plot and build a simple linear regression model using expenses as the dependent variable and bmi as the independent variable. Then answer the following questions:
+### A) Does there appear to be a linear relationship between BMI and expenses? What is its direction?
+Yes, there appears to be a slight positive linear relationship
+  
+### B) Is the relationship statistically significant?
+Yes, the P-Value is less than .05 and the F-Statistic is above 50
+  
+### C) Are the regression assumptions satisfied for this simple linear regression?
+Linearity is not met. The Residuals vs Fitted graph shows an asymettrical spread above and below the zero line.
+Homoskedacity is not met. Heteroskedacity is clearly present in the Residuals vs Fitted grpah.
+Normality is not met. Expenses skew right, while BMI is normally distributed. The Q-Q Plot also indicates a lack of normality. 
+Independence is not met. Cook's Distance for many observ ations is greater than 1. 
+ 
+### D) What percentage of variation in expenses is explained by BMI?
+BMI explains ~ 3.9% of the variation in expenses. 
+
+## 2) Build a multiple linear regression model using the backward elimination method. Continue to use expenses as the dependent variable.
+### A) Looking at the plot of residuals vs. fit for your stepwise model, what have you learned about the structure of the data?
+There appears to be a grouping of data.
+
+### B) Are the regression assumptions satisfied?
+Linearity is partially met. There is a somewhat symetrical breakdown of data in the Residuals vs Fitted graph. 
+Homoskedacity is not met. There is a clear grouping in the Scale-Location graph. 
+Normality is not met. The Q-Q Plot points are far from the projected line. 
+Independence is not met. Cook's Distance for many observ ations is greater than 1. 
+
+### C) Do there appear to be multiple groups in the data set?
+Yes, there appears to be 2-3 groups.
+
+## 3) There is at least one variable that's crucially important in making sense of the data. 
+### A) What is it? 
+Smoking is the crucial variable. Smoking by itself is responsible for .6195 of the adjusted r-squared.
+The model with every single independent variable has an adjusted r-squared of .7494. 
+Smoking explains 83% of the maximum (likely over-fitted) variance that the full-model provides. 
+  
+### B) Include at least one graph to illustrate the importance of this variable. 
+See bottom
+
+### C) Using this crucial variable, break the data set into two separate data sets, run a stepwise regression on each data set, and            comment on which variables seem important in each case.
+The only two independent variables that matter to smokers are BMI and Age.
+For non-smokers, the significant predictors include Age, Gender, Children, and Region. 
+For non-smokers, the adjusted r-squared is a relatively paltry .4137 with a F-statistic of 126. And the Residual Standard Error is 4589 with 1057 degrees of freedom. 
+
+## 4) Extra
+Males account for 58% of all respondents who smoke despite only being 50.5% of respondents. 
+It would be interesting
+
+\newpage
+
+#### Installing the necessary packages
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+library(tidyverse)
+library(MASS)
+library(leaps)
+library(car)
+```
+
+#### Accessing the data
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+setwd("C:/Users/andre/OneDrive/Desktop/PDAT 613")
+
+insurance <- read.csv("Insurance_A.csv", colClasses=c('numeric', 'factor', 'numeric', 'numeric', 'factor', 'factor', 'numeric'))
+```
+
+#### Initial view of BMI's impact on EXPENSES
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+scatter.smooth(insurance$expenses, insurance$bmi)
+cor(insurance$expenses, insurance$bmi)
+```
+
+
+#### Looking the distribution of the data (http://r-statistics.co/Linear-Regression.html)
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+#create 2-column graph area
+par(mfrow=c(1, 2))  
+
+#density plot for expenses
+e <- density(insurance$expenses)
+plot(e, main="Kernel Density of Expenses")
+polygon(e, col="red", border="black")
+
+#density plot for bmi
+d <- density(insurance$bmi)
+plot(d, main="Kernel Density of BMI")
+polygon(d, col="yellow", border="black")
+```
+
+#### Creating Simple Linear Regression model
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+simpleLR <- lm(expenses ~ bmi, insurance)
+summary(simpleLR)
+plot(simpleLR)
+```
+
+#### Creating Multiple Lineare Regression model
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+#Entire model
+full.model <- lm(expenses ~., data = insurance)
+summary(full.model)
+
+#Forward and Backward variable selection model
+step.model <- stepAIC(full.model, direction = "both", trace = FALSE)
+summary(step.model)
+
+#Backward selection only model. It has the same output as step.model
+back.model <- stepAIC(full.model, direction = "backward", trace = FALSE)
+summary(back.model)
+
+plot(step.model)
+```
+
+#### Finding the singular best predictor
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+#finding the one best predictor 
+models <- regsubsets(expenses ~., data = insurance, nvmax = 1, method = "seqrep")
+summary(models)
+
+#indicates "smoker" is the most important factor
+smoke <- lm(expenses ~ smoker, insurance)
+summary(smoke)
+plot(smoke)
+```
+#### Breaking the data into smokers and non-smokers
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+smoke <- insurance %>%
+  filter(smoker=='yes') %>%
+  dplyr::select(-smoker)
+
+no.smoke <- insurance %>%
+  filter(smoker=="no") %>%
+  dplyr::select(-smoker)
+
+```
+
+#### Backward regression on model on the smoker dataset
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+smoke.lm <- lm(expenses ~., data=smoke)
+smoke.step <- stepAIC(smoke.lm, direction = "both", trace = FALSE)
+summary(smoke.step)
+```
+Age and BMI are the only two significant factors. BMI is 7x as impactful.
+The model is has an adjusted R-Squared of .7518 with an F-Statistic of 414
+Residual Standard Error is 5750 on 271 degrees of freedom
+
+#### Backward regression on model on the non-smoker datasets
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+no.smoke.lm <- lm(expenses ~ ., data = no.smoke)
+no.smoke.step <- stepAIC(no.smoke.lm, direction = "both", trace = FALSE)
+summary(no.smoke.step)
+```
+For non-smokers, age, gender, children, and region living all impact the calculation
+However, the adjusted r-squared is a relatively paltry .4137 with a F-statistic of 126
+The Residual Standard Error is 4589 with 1057 degrees of freedom
+
+#### Graphically showing the affect on expense by each individual predictor
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+avPlots(smoke.step)
+```
+
+\newpage
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+avPlots(no.smoke.step)
+```
+
+\newpage
+#### Graphically showing difference in expenses between non-smokers and smokers
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+boxplot(insurance$smoker, insurance$expenses)
+```
+

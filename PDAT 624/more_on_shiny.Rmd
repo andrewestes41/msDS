@@ -1,0 +1,613 @@
+---
+title: "More on Shiny and HTML"
+author: "Scott Thatcher"
+date: "2/24/2021"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Simple HTML
+
+## Markup languages are methods for annotating text.
+
+- Markup can describe the conceptual parts of a document.
+
+  - HTML: `<h1> Introduction </h1>`
+  
+  - LaTeX: `\section{Introduction}`
+  
+  - Markdown: `# Introduction`
+
+- Markup can describe visual presentation.
+
+  - HTML: `<b> Bold Type </b>`
+  
+  - LaTeX: `\textbf{Bold Type}`
+  
+  - Markdown: `**Bold Type**`
+  
+## HTML uses tags to describe content.
+
+- Most tags come in open/close pairs: `<tag> ... </tag>`
+
+- Headings: `<h1> ... </h1>`, `<h2>`, `<h3>`, etc.
+
+- Paragraphs: `<p> ... </p>`
+
+- Pre-formatted Code: `<pre> ... </pre>`
+
+- Lists
+
+  - Unnumbered lists: `<ul> ... </ul>`
+  
+  - Ordered lists: `<ol> ... </ol>`
+  
+  - Items within a list: `<li> ... </li>`
+  
+## Example HTML
+
+:::::: {style="display: flex;"}
+
+::: {}
+
+    <html>
+    <body>
+    <h1> Weather Events </h1>
+    <h2> Introduction </h2>
+    <p>
+    This app allows you to explore
+    Missouri weather events from 2011.
+    </p>
+    
+    <h2> Instructions </h2>
+    <ul>
+    <li>Select desired weather events.</li>
+    <li>Click <b>Plot</b></li>
+    </ul>
+    
+    </body>
+    </html>
+    
+:::
+
+::: {}
+
+<html>
+<body>
+<h2>
+Weather Events
+</h2>
+<h3> Introduction </h3>
+<p>
+This app allows you to explore
+Missouri weather events from 2011.
+</p>
+
+<h3> Instructions </h3>
+<ul>
+<li>Select desired weather events.</li>
+<li>Click <b>Plot</b></li>
+</ul>
+
+</body>
+</html>
+ 
+:::
+
+::::::
+
+## Tags can take _attributes_
+
+- `<tag attribute="..."> ... </tag>`
+
+  - Attribute values in quotes.
+  
+  - Spaces separate multiple attributes.
+
+- The `<a> ... </a>` tag defines a hyperlink.
+
+  - The `href` attribute gives the link location.
+  
+  - The optional `target` attribute can tell it to open in a new window, for example.   
+
+:::::: {style="display: flex;"}
+
+::: {}
+
+    <a href="https://www.noaa.gov/" target="_blank">
+    Click here.
+    </a>
+   
+:::
+
+::: {}
+
+<a href="https://www.noaa.gov/" target="_blank">Click here.</a>
+   
+:::
+
+::::::
+
+## Cascading Style Sheets (CSS) were a later web innovation.
+
+- Problem/Feature: Semantic tags don't address display.
+
+- Early Solution
+
+  - Hard-code display design with tables and images.
+  
+  - This solution was **not** flexible or elegant.
+  
+- CSS Solution
+
+  - Design a language to specify display style.
+  
+  - Styles can be organized into hierarchies.
+  
+  - Styles are independent from semantic markup, and can be ignored.
+  
+## Simple styles can be specified as tag attributes.
+
+- Use the `style` attribute.
+
+- Styles are written `name:value;`
+
+- Some tags don't do much by themselves, but denote units in the document
+  that can be styled or otherwise manipulated.
+
+  - The `<span>` tag denotes an inline unit.
+
+  - The `<div>` tag denotes a larger block of content.
+
+:::::: {style="display: flex;"}
+
+::: {}
+
+    <b style="color:red;"> Multicolored </b>
+    <b style="color:blue;"> text </b>
+    <span style="color:green;">
+      can be hard to read.
+    </span>
+
+::: 
+
+::: {}
+
+<b style="color:red;"> Multicolored </b>
+<b style="color:blue;"> text </b>
+<span style="color:green;">
+   can be hard to read.
+</span>
+
+::: 
+
+::::::
+
+## Styles are inherited.
+
+
+:::::: {style="display: flex;"}
+
+::: {}
+
+    <b style="color:red;"> Multicolored </b>
+    <b style="color:blue;"> text </b>
+    <span style="color:green;">
+       can be
+       <b style="font-family:serif;">
+         hard to read.
+       </b>
+    </span>
+
+::: 
+
+::: {}
+
+<b style="color:red;"> Multicolored </b>
+<b style="color:blue;"> text </b>
+<span style="color:green;">
+   can be
+   <b style="font-family:serif;">
+     hard to read.
+   </b>
+</span>
+
+::: 
+
+::::::
+
+## HTML can be included in shiny apps using R commands or raw HTML.
+
+:::::: {style="display: flex; max-width:100px;"}
+
+::: {}
+
+    sidebarPanel(
+      h2("Weather Events"),
+      h3("Introduction"),
+      p("This app allows you
+        to explore weather events
+        from 2011."),
+      h3("Instructions"),
+      tags$ul(tags$li("Select events."),
+        tags$li("Click", tags$b("Plot")))
+    ),
+
+:::
+
+::: {}
+
+    sidebarPanel(
+      HTML("
+       <h2> Weather Events </h2>
+       <h3> Introduction </h3>
+       <p>
+       This app allows you
+       to explore weather events
+       from 2011.
+       </p>
+       
+       <h3> Instructions </h3>
+       <ul>
+       <li>Select events.</li>
+       <li>Click <b>Plot</b></li>
+       </ul>
+     ")
+    ),
+   
+::: 
+
+::::::
+
+# Style Sheets
+
+## CSS can be specified in a "style sheet."
+
+:::::: {style="display: flex;"}
+
+::: {}
+
+    <html>
+    <head>
+    <style>
+    h2 {
+      color:blue;
+    }
+    p {
+      font-family:serif;
+    }
+    </style>
+    </head>
+    
+    <body>
+    <h2> Style Sheets </h2>
+    <p> This paragraph will discuss
+    style sheets. </p>
+    </body>
+    </html>
+
+:::
+
+::: {}
+
+<h2 style="color:blue;">Style Sheets</h2>
+
+<p style="font-family:serif;">This paragraph will discuss style sheets.</p>
+
+:::
+
+::::::
+
+## CSS _selectors_ determine where styles are applied.
+
+:::::: {style="display: flex;"}
+
+::: {}
+
+**Selectors can be tags.**
+
+    h2 {
+      color:blue;
+    }
+        
+**Selectors can be _classes_ (names start with ".")**
+
+    .seriftext {
+      font-family:serif;    
+    }
+        
+::: 
+
+::: {}
+
+    <h2> Style Sheets </h2>
+    <p> Here we talk about style sheets.</p>
+    
+    <h2 class="seriftext"> Serif Heading </h2>
+    <p class="seriftext"> And some text. </p>
+
+```{css}
+.seriftext {
+  font-family:serif;
+}
+h2.incolor {
+  color:blue;
+}
+p.incolor {
+  color:red;
+}
+```
+
+<h2 style="color:blue;"> Style Sheets </h2>
+<p> Here we talk about style sheets.</p>
+
+<h2 style="color:blue;" class="seriftext"> Serif Heading </h2>
+<p class="seriftext"> And some text. </p>
+
+
+::: 
+
+:::::: 
+
+## Selectors can specify classes within tags.
+
+:::::: {style="display: flex;"}
+    
+:::{}
+
+    h2.incolor {
+      color:blue;
+    }
+    p.incolor {
+      color:red;
+    }
+    
+
+:::
+
+:::{}
+
+    <h2 class="incolor"> Style Sheets </h2>
+    <p class="incolor"> Here we talk about style sheets.</p>
+
+<h2 class="incolor"> Style Sheets </h2>
+<p class="incolor"> Here we talk about style sheets.</p>
+
+
+:::
+
+::::::
+
+## Multiple selectors can be specified for the same style definitions.
+
+
+:::::: {style="display: flex;"}
+    
+::: {}
+
+    h2, p {
+      color:green;
+    }
+    p {
+      font-family:serif;
+    }
+
+:::
+
+::: {}
+
+    <h2> Style Sheets </h2>
+    <p> Here we talk about style sheets.</p>
+
+<h2 style="color:green;"> Style Sheets </h2>
+<p style="color:green; font-family:serif;"> Here we talk about style sheets.</p>
+
+:::
+
+::::::
+
+## Including style sheets in HTML
+
+
+:::::: {style="display: flex;"}
+    
+::: {}
+
+**In-line**
+
+    <html>
+    <head>
+    <style>
+    h2 {color:blue;}
+    </style>
+    </head>
+    
+    <body>
+    Content goes here...   
+    </body>
+    </html>
+
+:::
+
+::: {}
+
+**Linked**
+
+    <html>
+    <head>
+    <link rel="stylesheet" href="stylesheet.css">
+    </head>
+    
+    <body>
+    Content goes here...   
+    </body>
+    </html>
+
+
+:::
+
+::::::
+
+## Including Style Sheets in Shiny Apps
+
+
+:::::: {style="display: flex;"}
+    
+::: {}
+
+**In-line, Specified in App**
+
+    ui <- fluidPage(
+      tags$head(
+        tags$style(HTML("
+          h2 {
+            color:blue;
+          }"))
+      ),
+    ...
+    )
+    
+**In-line, Specified in File**
+
+    ui <- fluidPage(
+      includeCSS("www/stylesheet.css"),
+    ...
+    )
+    
+:::
+
+::: {}
+
+**Linked**
+
+    ui <- fluidPage(
+      tags$head(
+        tags$link(
+          rel = "stylesheet",
+          type = "text/css",
+          href = "stylesheet.css"
+        )
+      )
+      ...
+    )
+
+<span style="font-size:18px;">
+Note that `stylesheet.css` should still be placed in the `www/` subdirectory.
+The `www/` directory should contain everything needed by the web server
+(as opposed to the R code).
+</span>
+
+:::
+
+::::::
+
+## Columns are a useful use of styles.
+
+
+```{css echo=TRUE}
+.columns { display: flex; }
+.column { width:50%; }
+```
+
+
+:::::: columns
+
+::: column
+
+    <div class="columns">
+    <div class="column">
+    Column 1
+    </div>
+    <div class="column">
+    Column 2
+    </div>
+    </div>
+
+
+<p style="font-size:smaller;">
+**Note:** There are multiple column methods in R Markdown and HTML, but these
+classes match Markdown HTML output with the built-in column feature of
+Markdown PDF and PPT output.
+</p>
+
+:::
+
+::: column
+
+    :::::: columns
+    
+    ::: column
+    
+    Column 1
+    
+    :::
+    
+    ::: column
+    
+    Column 2
+    
+    :::
+    
+    ::::::
+
+:::
+
+::::::
+
+# Shiny Themes
+
+## Based on Bootstrap
+
+- [Bootstrap (getbootstrap.com)](https://getbootstrap.com/) is an open-source
+  toolkit for designing responsive web sites.
+
+- You might find answers to some questions about Shiny app components in more
+  general information about Bootstrap.
+
+- Bootstrap includes free themes and a [themes marketplace (getbootstrap.com)](https://themes.getbootstrap.com/).
+
+## Page Layouts
+
+- See [the Layout Guide (rstudio.com)](https://shiny.rstudio.com/articles/layout-guide.html)
+
+- `fluidPage()` adjusts for window resizing.
+
+  - Elements can include `titlePanel()`, and `sidebarPanel()` and
+    `mainPanel()` inside `sidebarLayout()`.
+
+  - `tabsetPanel()` and `navlistPanel()` offer organization and navigation in
+    the page.
+
+  - Rather than `sidebarLayout()`, you can access a grid system with
+    `fluidRow()` and `column()` functions.
+
+- `fixedPage()` offers a grid system that doesn't dynamically resize (as much).
+
+- `navbarPage()` creates a set of tabbed pages.
+
+## Shiny Themes
+
+- Check out [Shiny Themes (github.io)](https://rstudio.github.io/shinythemes/).
+
+- Install the `shinythemes` package. (Don't put the install command _in_ your
+  Shiny app!)
+
+- In the Shiny app:
+
+        library(shinythemes)
+        shinyApp(
+          ui = fluidPage(theme = shinytheme("united"),
+            ...
+          ),
+          server = function(input, output) { }
+        )
+
+- You can find these theme files under `shinythemes/shinythemes/css` in your R
+  package directory.
+
+## More Information
+
+R Studio provides both [video and text-based Shiny tutorials (rstudio.com)](https://shiny.rstudio.com/tutorial/).

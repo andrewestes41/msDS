@@ -1,0 +1,330 @@
+---
+title: "Mapping Examples with sp and sf"
+author: "Scott Thatcher"
+date: "March 31, 2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Introduction
+
+The `sp` and `sf` packages provide data structures that connect data
+with spatial information needed to map or analyze the data.  Both create data
+structures where the spatial information is "sticky," meaning that when the
+data is filtered or subset, the spatial information stays with it. The `sp`
+package is older, while `sf` is newer and offers an interface that mimics what
+an R user would expect from a data frame.
+
+```{r}
+# Installation note: To get the "rnaturalearthhires" package, you'll have to do
+# the following:
+#
+# install.packages("devtools")
+# devtools::install_github("ropensci/rnaturalearthhires")
+#
+# The rnaturalearthhires is large and not hosted on CRAN.
+# You may or may not see other messages about upgrading packages when you run
+# the devtools command. I chose the upgrade from CRAN option.
+#
+# Along the way, I was also prompted to install the rgeos packages:
+# install.packages("rgeos")
+
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+```
+
+# The `sp` Data Structure
+
+```{r}
+map_sp <- ne_states(country="united states of america", returnclass="sp")
+map_sf <- ne_states(country="united states of america", returnclass="sf")
+```
+
+The `sp` data structure is an S4 object, which is the more "modern" type of
+data structure in R. S4 objects have "slots" that hold information, and which
+are accessed using a "@" character after the object name. You can see that the
+slots hold the data necessary to draw the map:
+
+```{r}
+slotNames(map_sp)
+head(head(map_sp@polygons,1))
+```
+
+Other data is accessable through the regular `$` operator:
+
+```{r}
+names(map_sp)
+head(map_sp, 2)
+```
+
+# The `sf` Data Structure
+
+The `sf` package provides a data structure that behaves more like a data
+frame. Note that all the spatial information is contained in the last
+"column."
+
+```{r}
+head(map_sf)
+```
+
+## `sf` Structures Act Like Data Frames
+
+Indexing by row and column works as you'd expect, but spatial information is
+always retained.
+
+```{r}
+plot(map_sf)
+```
+
+Hey! What's that weird thingy on the right?!
+
+```{r}
+map_sf %>% filter(name=="Alaska") %>% ggplot() + geom_sf(aes(fill=region))
+# Let's concentrate on the continental U.S.
+map_sf <- map_sf %>% filter(name != "Alaska" & name != "Hawaii")
+# Unline most geoms, geom_sf can be used without aesthetics--there are defaults
+# for the different map elements.
+ggplot(map_sf) + geom_sf()
+# But you can use other elements of the sf "dataframe."
+ggplot(map_sf) + geom_sf(aes(fill=region))
+```
+
+## Mapping Information in `sf` Objects
+
+Mapping information can be of many different sorts. Basic building blocks in
+the `sf` package include
+
+- points,
+- multi-points,
+- lines,
+- multi-lines,
+- polygons, and
+- multi-polygons.
+
+These objects can then also be combined together, then merged with an existing
+data frame. Here's an easy example:
+
+```{r}
+# Define our data frame.
+local <- data.frame(
+  name = c("Kirksville", "Columbia", "St. Louis", "Kansas City", "US63", "I70")
+)
+# Define our spacial elements
+kv <- st_point(x <- c(-92.61, 40.17))
+co <- st_point(x <- c(-91.94, 38.95))
+st <- st_point(x <- c(-90.20, 38.63))
+kc <- st_point(x <- c(-94.58, 39.10))
+# Note that individual points are stored in the _rows_ of the matrices.
+us63 <- st_linestring(x = matrix(c(-92.61, 40.17,
+                                  -91.94, 38.95),
+  nrow=2, byrow=TRUE))
+i70 <- st_linestring(x = matrix(c(-94.58, 39.10,
+                                  -91.94, 38.95,
+                                  -90.20, 38.63),
+                                nrow=3, byrow=TRUE))
+# At this stage, individual elements are combined into an sf "column."
+local_sfc <- st_sfc(kv, co, st, kc, us63, i70)
+# That sf column is then combined with the regular columns of the data frame.
+local_sf <- st_sf(local, local_sfc)
+ggplot(local_sf) + geom_sf()
+```
+
+For quick use, however, there's a better way to make an `sf` data structure
+from coordinates:
+
+```{r}
+local2_df <- data.frame(
+  name = c("Kirksville", "Columbia", "St. Louis", "Kansas City"),
+  lat = c(40.17, 38.95, 38.63, 39.10),
+  long = c(-92.61, -91.94, -90.20, -94.58)
+)
+local2_sf <- st_as_sf(local2_df, coords = c("long", "lat"))
+ggplot(local2_sf) + geom_sf()
+```
+
+## Coordinate Reference Systems
+
+All maps must have a coordinate system. Global latitude and longitude is one
+coordinate system, but there are many, many local coordinate systems as well
+that serve many, many specific needs. Here's how to find the CRS of a
+particular `sf` data structure:
+
+```{r}
+st_crs(map_sf)
+```
+
+If I want my new local map to play nicely with the existing map of Missouri, I
+need to make sure it has the same CRS. I can either use the numeric EPSG code or
+the `User input:` string.  The "WGS84" part is good enough, it seems. If no CRS
+is specified, the `plot` function seems to assume latitude and longitude, but
+the `ggplot` methods will throw a fit.
+
+```{r}
+mo_sf <- map_sf[map_sf$name=="Missouri", "region"]
+local_sf <- st_sf(local, local_sfc, crs="WGS84")
+# The reset=FALSE option is necessary to allow adding components.
+ggplot(mo_sf) +
+  geom_sf() + geom_sf(data=local_sf)
+```
+
+The magic "WGS84" refers to the global standard "World Geodetic System:
+WGS 84" which uses latitude and longitude, and is a good choice if you want
+interoperability.
+
+The CRS can also specify a specific map projection, and the `st_transform`
+function will do all the hard work. In ggplot, you can also specify the
+transform in the `coord_sf` function. Here's an example of the United States in
+the Lambert azimuthal equal-area projection ("laea"), centered at two different
+points:
+
+```{r}
+# Centered at the north pole!
+ggplot(st_transform(map_sf,
+                    crs = "+proj=laea +x_0=0 +y_0=0 +lon_0=0 +lat_0=90")) +
+  geom_sf(aes(fill=name)) +
+  guides(fill="none")
+# Centered at Kirksville, using "coord_sf"!
+ggplot(map_sf) +
+  geom_sf(aes(fill=name)) +
+  coord_sf(crs = "+proj=laea +x_0=0 +y_0=0 +lon_0=-92.61 +lat_0=40.17") +
+  guides(fill="none")
+```
+
+See Chapter 6, [_Geocomputation with R_](https://geocompr.robinlovelace.net/), for lots more information.
+
+## More Data Manipulations
+
+Another data set can be joined with an `sf` data structure.
+
+```{r}
+us_arrests <- USArrests
+us_arrests$state <- rownames(USArrests)
+# The sf data structure should come first as it determined final class.
+# The `by` option needed because name fields don't match.
+new_sf <- inner_join(map_sf, us_arrests, by=c("name"="state"))
+plot(new_sf[, "UrbanPop"])
+```
+
+`dplyr` operations tend to work!
+
+```{r}
+new_sf %>% group_by(region) %>% summarize(UrbanPop = mean(UrbanPop)) %>%
+  select(UrbanPop) %>%
+  ggplot() + geom_sf(aes(fill=UrbanPop))
+```
+
+By the way, there are statistical and design reasons why what I just did is
+bad! What are they?
+
+# Getting Mapping Data
+
+There are many possible sources of mapping data in R:
+
+- Packages like `rnaturalearth` or `maps` that include a functional interface
+  to their map data.
+- Packages like `spData` that contain example data sets.
+- Outside sources.
+
+## The `maps` Package and `map` Function
+
+Note that both `purrr` and `maps` define a very different `map` function! You
+might have to use the long form to avoid ambiguity. The `map` function will
+also draw the map unless you set `plot=FALSE`. Note that `map` produces a
+"map" object, which can be converted to other forms.
+
+```{r}
+library(maps)
+# fill=TRUE is required to allow easy conversion to other formats.
+china_map <- maps::map(database="world", region="China", fill=TRUE)
+china_sf <- st_as_sf(china_map)
+ggplot(china_sf) + geom_sf()
+```
+
+## Loading Outside Data
+
+The `rgdal` package contains support for reading external data sources, such
+as file that are used by geographic information system (GIS) software. If you
+are not an expert (I am not), you'll likely have to Google to see what to do
+with a particular file.
+
+If you're using the `sf` package, there is a provided command `st_read` to
+make life easier. 
+
+For both commands, you need to provide a "data source name" option (`dsn`) and
+a "layer" to read (`layer`). What information you put in these options varies
+by data type and source (again, Google?).
+
+```{r}
+# First argument is directory, second name of shape file without extension.
+unzip("data/King_County.zip", exdir="KC")
+king_sf <- st_read(dsn="KC", layer="King_County")
+ggplot(king_sf) + geom_sf() 
+```
+
+See Chapter 7 of _Geocomputation with R_ for more information on the rather
+vast array of online sources!
+
+# Plotting Maps
+
+## The `plot` Command with `sf`
+
+We're already seen lots of examples. The `sf` package extends the base-R
+`plot` command.
+
+## `ggplot` with `geom_sf`
+
+This option leaverages what you already know about `ggplot`, and seems to
+work well.
+
+```{r}
+ggplot(map_sf) + geom_sf(aes(fill=region))
+ggplot(mo_sf) +
+  geom_sf() +
+  geom_sf(data=local_sf, mapping=aes(color=name))
+```
+
+## The `tmap` Package
+
+The `tmap` package has a format similar to `ggplot`, perhaps dealing with
+mapping data with a more dedicated focus, and offers the advantage that a
+single option can switch you from a static map to a `leaflet` interactive map.
+
+```{r}
+library(tmap)
+nepal_map <- maps::map(database="world", region="Nepal", fill=TRUE)
+nepal_sf <- st_as_sf(nepal_map)
+nepal_tm <- tm_shape(nepal_sf) + tm_fill() + tm_borders()
+nepal_tm
+```
+
+Or, with `leaflet`,
+```{r}
+tmap_mode("view")
+nepal_tm
+```
+
+Base tiles are specified in different ways, however, between static and
+dynamic maps. Here's a more complicated example, with the dynamic first:
+
+```{r}
+tmap_mode("view")
+tm_shape(nepal_sf) + tm_basemap("OpenTopoMap") + tm_fill(alpha =0.5)
+```
+
+The static version could use `read_osm` from the `tmaptools` package, but that
+command suggests the `osmdata` package if you want vector-format maps. I'll
+stick with `read_osm` here, because I don't want vector maps.
+
+```{r}
+tmap_mode("plot")
+tm_shape(nepal_sf) + tm_basemap("OpenTopoMap") + tm_fill(alpha =0.5)
+# install.packages("OpenStreetMap")
+library(tmaptools)
+# see ?openmap for type list
+nepal_topo <- read_osm(nepal_sf,
+  type="https://a.tile.opentopomap.org/{z}/{x}/{y}.png")
+tm_shape(nepal_topo) + tm_rgb() + tm_shape(nepal_sf) + tm_fill(alpha=0.5)
+```

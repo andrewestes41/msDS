@@ -1,0 +1,292 @@
+---
+title: Module 6 Coding Lab, Part 3
+subtitle: Pre-Built Convolutional Neural Networks
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(keras)
+```
+
+# Using Pre-Built Neural Networks
+
+Let's look at how to use a pre-built neural network designed for a specific
+purpose. Keras has several built in. The "ResNet50" model has been pre-trained
+for image recognition on the standard "ImageNet" image database.
+
+See [https://cran.r-project.org/web/packages/keras/vignettes/applications.html](https://cran.r-project.org/web/packages/keras/vignettes/applications.html) for other
+pre-trained models.
+
+```{r}
+k_clear_session()
+model <- application_resnet50(weights = 'imagenet')
+summary(model)
+```
+
+## Identifying new Images
+
+First, we'll load in two images. Note that the training images for `resnet50`
+were 224x224 pixels, so we'll rescale our images to match. You could do this with any images--there's nothing special about elephant and basketball.
+
+```{r}
+elephant_path <- "elephant.jpg"
+elephant <- image_load(elephant_path, target_size=c(224, 224))
+elephant <- image_to_array(elephant)
+basketball_path <- "historic_basketball.jpg"
+basketball <- image_load(basketball_path, target_size=c(224, 224))
+basketball <- image_to_array(basketball)
+```
+
+The original images are encoded with integer values from 0 to 255 in the Red,
+Green and Blue channels:
+
+```{r}
+dim(elephant)
+summary(elephant)
+```
+
+The elephant is a modern elephant, but the basketball is an old-style
+basketball. (Note: There are lots of ways to plot images in R, none of which is
+as simple as I'd like for RGB images. This way doesn't use extra packages.)
+
+```{r}
+par(mfrow=c(1,2))
+plot.new(); plot.window(xlim=c(0,1), ylim=c(0,1), asp=1)
+rasterImage(elephant/255, 0, 0, 1, 1)
+plot.new(); plot.window(xlim=c(0,1), ylim=c(0,1), asp=1)
+rasterImage(basketball/255, 0, 0, 1, 1)
+```
+
+The `resnet50` model expects a 4-dimensional stack (or "tensor") of input:
+
+- Dimension 1: Indexes which image we're looking at.
+- Dimensions 2 and 3: Define the two-dimensional image geometry.
+- Dimension 4: The color channels (in this case, R, G and B)
+
+We'll put our images together that way. Even with a single image, you'd need
+to embed it in four dimensions in order to use the `resnet50` model.
+
+```{r}
+image_stack <- array(dim=c(2, dim(elephant)))
+image_stack[1, , , ] <- elephant
+image_stack[2, , , ] <- basketball
+```
+
+Because `resnet50` will expect images to conform to certain standards used in
+the ImageNet database, we'll preprocess the images using a built-in
+preprocessing command to make sure they conform to the value ranges that would
+be expected.
+
+```{r}
+image_stack <- imagenet_preprocess_input(image_stack)
+```
+
+Finally, we'll use the `predict` command to make predictions. Note that we
+don't get a single prediction, but actually set of possible identifications.
+There's also a built-in function to decode the numeric predictions back into
+human-readable labels.
+
+```{r}
+preds <- model %>% predict(image_stack)
+imagenet_decode_predictions(preds, top=3)
+```
+
+## Identifying _Lots_ of New Images
+
+The CIFAR-10 data set is a nice set for training models relatively quickly. It
+consists of many small 32x32 pixel images in 10 categories. Let's load the 
+data set, and then take only images in categories 5 and 6 (frogs and dogs,
+which rhyme, so they must be hard to tell apart).
+
+```{r, eval=FALSE}
+cifar <- dataset_cifar10()
+cifar$train$x <- cifar$train$x[cifar$train$y %in% c(5, 6), , , ]/255
+cifar$train$y <- cifar$train$y[cifar$train$y %in% c(5, 6)]
+cifar$train$y <- factor(if_else(cifar$train$y == 5, "Dog", "Frog"))
+cifar$test$x <- cifar$test$x[cifar$test$y %in% c(5, 6), , , ]/255
+cifar$test$y <- cifar$test$y[cifar$test$y %in% c(5, 6)]
+cifar$test$y <- factor(if_else(cifar$test$y == 5, "Dog", "Frog"))
+```
+
+Here's a sample.
+
+```{r, eval=FALSE}
+par(mfrow=c(1,2))
+plot.new(); plot.window(xlim=c(0,1), ylim=c(0,1), asp=1)
+rasterImage(cifar$train$x[1, , , ], 0, 0, 1, 1)
+text(x=0.5, y=0.1, label=cifar$train$y[1], cex=2, col="white")
+plot.new(); plot.window(xlim=c(0,1), ylim=c(0,1), asp=1)
+rasterImage(cifar$train$x[7, , , ], 0, 0, 1, 1)
+text(x=0.5, y=0.1, label=cifar$train$y[7], cex=2, col="white")
+```
+
+The entire CIFAR-10 data set takes enough memory that I get crashes later on if
+it's all in memory at once. This code creates directories and saves the images
+so that they can be loaded in a few at a time during model training. Note that
+several cells have "eval=FALSE" tag, which means they won't run when I'm
+knitting (I assume I've already created the image directories when I knit).
+
+```{r, eval=FALSE}
+dir.create("Train")
+dir.create("Test")
+for(lab in levels(cifar$train$y)){
+  dir.create(paste0("Train/", lab))
+  dir.create(paste0("Test/", lab))
+}
+for(i in 1:dim(cifar$train$x)[1]){
+  png::writePNG(cifar$train$x[i, , , ],
+                paste0("Train/", cifar$train$y[i], "/img", i, ".png")) 
+}
+for(i in 1:dim(cifar$test$x)[1]){
+  png::writePNG(cifar$test$x[i, , , ],
+                paste0("Test/", cifar$test$y[i], "/img", i, ".png")) 
+}
+rm(cifar)
+```
+
+Having done the work to save the images, now we're back to machine learning.
+We next need to define image generators and image flows to feed into our model
+training.
+
+```{r}
+training_image_gen <- image_data_generator(
+  width_shift_range = 0.2,
+  height_shift_range = 0.2,
+  # I really want to try to train on the serif/sans details, so the next two
+  # ensure that letters are in a variety of orientations.
+  rotation_range = 20,
+  horizontal_flip = TRUE,
+  validation_split=0.2
+)
+training_image_flow <- flow_images_from_directory(
+  directory = "Train/",
+  generator = training_image_gen,
+  subset = "training",
+  class_mode = "binary",
+  batch_size = 20,
+  target_size = c(224, 224),
+  # Randomizing inputs is important so that the NN doesn't get stuck in a rut.
+  # It's the default, but I've put it in explicitly.
+  shuffle = TRUE
+)
+# A separate directory and generator could be used with a fixed validation set.
+validation_image_flow <- flow_images_from_directory(
+  directory = "Train/",
+  generator = training_image_gen,
+  subset = "validation",
+  class_mode = "binary",
+  batch_size = 20,
+  target_size = c(224, 224),
+  shuffle = FALSE
+)
+
+```
+
+The idea here is that the `resnet50` model we've created (which I've called `model`) is already good at identifying objects. So, we create a new model
+that first runs an image through `restnet50`, then adds on a last 
+non-convolutional layer at the end to use the `resnet50` output for the
+particular task of finding dogs and frogs.
+
+At this stage, the `resnet50` portion of the model is "frozen," which means
+that the model training won't affect it's weights. We'll only train our add-on.
+
+(Note that it might be a bad idea to do this. `restnet50` is designed to
+classify 224x224 images with more detail. Will it really be efficient in 
+classifying much blurrier images? This is a demonstration of technique more
+than a demonstration of absolute "best practices.")
+
+```{r}
+freeze_weights(model)
+dfmodel <- keras_model_sequential() %>%
+  # Pre-built resnet50 model.
+  model %>% 
+  # My additions to find dogs and frogs.
+  layer_dense(units=256, activation="relu") %>%
+  layer_dropout(rate=0.2) %>%
+  layer_dense(units=1, activation="sigmoid") %>%
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+```
+
+Now we train the last bit of the model, using only a few epochs.
+
+```{r}
+dfmodel %>% fit(
+  x=training_image_flow,
+  validation_data=validation_image_flow,
+  epochs=2
+)
+```
+
+Maybe we've got a model that's not bad at finding frogs and dogs, even though
+most of the model is still optimized for identifying many different objects. A
+last stage could be to unfreeze the original `resnet50` model and now try to
+tune all layers. **Warning:** This takes more time and memory. My R session
+crashed every time before I moved the dog/frog images to disk, rather than RAM.
+
+```{r}
+unfreeze_weights(model)
+dfmodel %>% compile(
+  loss = "binary_crossentropy",
+  optimizer = "adam",
+  metrics = "accuracy"
+)
+```
+
+Here we run the training on the whole module. One epoch took about 15 minutes on
+my computer, so beware doing many epochs at a time.
+
+```{r}
+dfmodel %>% fit(
+  x=training_image_flow,
+  validation_data=validation_image_flow,
+  epochs=1
+)
+```
+
+I saw about 80% accuracy from one run with the frozen layers, and mayber an
+extra 1% accuracy from tuning the whole model through one epoch.
+
+### The `resnet50` Model without Extra Tuning
+
+How well does `resnet50` on its own identify frogs and dogs?
+
+```{r}
+pred <- model %>% predict(validation_image_flow)
+pred.classes <- bind_rows(imagenet_decode_predictions(pred, top=1))
+table(pred.classes$class_description)
+```
+
+### Our tuning layer without the `resnet50` layer.
+
+Could we have achieved the same results with only our last layer---not running
+the images through `restnet50` first?
+
+```{r}
+dfnn <- keras_model_sequential() %>%
+  # Note that layer_dense expects a "flat" vector, not an image, so we add
+  # layer_flatten first.
+  layer_flatten() %>%
+  layer_dense(units=256, activation="relu", input_shape=c(224, 224, 3)) %>%
+  layer_dropout(rate=0.2) %>%
+  layer_dense(units=1, activation="sigmoid") %>%
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+```
+
+How does our very small neural network perform?
+
+```{r}
+dfnn %>% fit(
+  x=training_image_flow,
+  validation_data=validation_image_flow,
+  epochs=15
+)
+```

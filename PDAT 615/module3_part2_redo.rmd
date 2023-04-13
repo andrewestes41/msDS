@@ -1,0 +1,201 @@
+---
+title: "module3_part2"
+author: "Andrew Estes"
+date: "4/5/2022"
+output: pdf_document
+---
+---
+title: "module3_part2"
+author: "Andrew Estes"
+date: "4/2/2022"
+output: pdf_document
+---
+
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(caret)
+library(pROC)
+library(plotmo)
+```
+
+# 1
+Use the same code that I used in the lab to clean the data frame and get it ready to use. You'll be using the mycars data frame that the lab code defines.
+```{r}
+data("cars")
+brand.names <- c("Buick", "Cadillac", "Chevy", "Pontiac", "Saab", "Saturn")
+car.types <- c("coupe", "hatchback", "sedan", "wagon")
+
+mycars <- cars %>%
+  mutate(Brand = factor(case_when(
+    Buick == 1 ~ "Buick",
+    Cadillac == 1 ~ "Cadillac",
+    Chevy == 1 ~ "Chevy",
+    Pontiac == 1 ~ "Pontiac",
+    Saab == 1 ~ "Saab",
+    Saturn == 1 ~ "Saturn"))) %>%
+  mutate(Type = factor(case_when(
+    coupe == 1 ~ "coupe",
+    hatchback == 1 ~ "hatchback",
+    sedan == 1 ~ "sedan",
+    wagon == 1 ~ "wagon",
+    TRUE ~ "NA"))) %>%
+  select(!contains(brand.names) & !contains(car.types))
+```
+
+\newpage
+# 2
+Use train and method="lm" to compute a multiple linear regression model and get 
+its cross-validated RMSE. Include the option savePredictions=TRUE in your
+trainControl open set.
+
+A) Make sure to state your RMSE result in the text. This is the baseline RMSE
+that the other models should be able to beat.
+
+B) Also, make a plot of residuals vs. fit. 
+This plot puts the difference between actual and predicted price on the y axis, 
+plotted against actual price on the y axis. 
+
+For a well-fitting model, this cloud of residuals should be symmetric 
+around the 0 line with no non-linear zigs or zags. 
+
+Comment in the text on how well your model appears to fit the data, based on 
+this graph. You can use code that might look like this:
+  plot(x=fit$pred$obs, y=fit$pred$obs-fit$pred$pred)
+```{r, warning=FALSE}
+#need to add minimize RMSE function
+fit.lm.mycars <-
+  train(Price ~ ., 
+        data=mycars,
+        method="lm",
+        trControl=trainControl(method="repeatedcv", 
+                               number=100, 
+                               savePredictions="final",
+                               classProbs=TRUE)
+  )
+
+
+#fit.lm.train$finalModel
+plot(x=fit.lm.mycars$pred$obs, y=fit.lm.mycars$pred$obs-fit.lm.mycars$pred$pred)
+  
+fit.lm.mycars$results$RMSE
+```
+With 100-fold cross-validation, the RMSE was 2797
+The graph shows an increasing trend - larger residual values as price increases.
+
+\newpage
+# 3
+Use train and method="svmRadialSigma" to tune a support vector machine. 
+Include the option savePredictions=TRUE in your trainControl open set. 
+As in Part 1 of the homework, give it a few tries to try to find optimal tuning 
+parameters. Then do the following:
+
+A) Plot RMSE vs. values of your tuning parameters and state in the text the
+values of the tuning parameters that optimized RMSE.
+
+B) State the best RMSE you found in the text, and comment on whether it was 
+higher or lower than the regular linear regression.
+
+C) Make a plot of residuals vs. fit, as described above, for this model. 
+Comment on how well the support vector machine seems to fit the data. 
+Does it do better than the plan old linear regression?
+```{r}
+fit.svm.mycars <-
+  train(Price ~ ., 
+        data=mycars,
+        method="svmRadialSigma",
+        #maximize = ifelse(metric == "RMSE", FALSE, TRUE),
+        trControl=trainControl(method="repeatedcv", 
+                               number=10, 
+                               repeats=5,
+                               savePredictions="final"
+                                )
+  )
+
+plot(fit.svm.mycars)
+
+fit.svm.mycars$bestTune
+min(fit.svm.mycars$results$RMSE)
+```
+The best RMSE using 10-fold cross-validation repeating 5 times was an RMSE of
+2205. This is better than linear regression RMSE.
+
+Ideal sigma was .05365 with a cost of 1.
+
+```{r}
+plotres(fit.svm.mycars)
+```
+Residual plot shows the SVM had less variance at higher price.
+It did seem to struggle the most at the 40k price point.
+
+\newpage
+# 4
+Do the same thing with a single-layer neural network using either the nnet or 
+neuralnet method (caution: neuralnet runs slow, so start small). 
+
+Remember the nnet is single-layer by design, and for neuralnet, you'll have to 
+use tuning parameters to try different numbers of notes in layer1 and set the 
+layer2 and layer3 parameters to zero. 
+
+Or, if you're feeling brave, look at one of the other neural network methods 
+available through train. Neither nnet nor neuralnet seem to work very well with 
+this data (perhaps because of all the 0/1 variables?), but comment on what you 
+see. Or, maybe you'll find a way to make a neural net work!
+```{r}
+fit.neuralnet.mycars <- 
+  train(Price ~ Mileage + Type, 
+        data=mycars, 
+        method="neuralnet",
+        trControl=trainControl(method="cv", 
+                               number=3,
+                               savePredictions="final"),
+        preProcess=c("scale", "center"),
+        tuneGrid=expand.grid(layer1=c(2, 5, 10), 
+                             layer2=c(0), layer3=c(0)),
+        threshold=0.3                
+  )
+
+plot(fit.neuralnet.mycars)
+```
+The best RMSE was nearly 10,000.
+
+```{r}
+plotres(fit.neuralnet.mycars)
+```
+
+
+\newpage
+# 5
+## Finally, add a paragraph that sums it all up. Which method worked best? 
+## Which fit the data best in this example?
+
+The linear regression performed the best with a RMSE of 449.
+The SVM was close at 486 but given the added complexity, it was not a close 2nd.
+The neural net method had a RMSE of nearly 10,000. Significantly worse.
+
+I went to research why neural nets performed poorly and found this post on 
+stack exchange - https://stats.stackexchange.com/questions/240357/r-neuralnet-package-is-very-slow-and-the-final-results-are-not-good
+
+Basically it has to do with how neural nets work and the inefficiencies associated
+with sparse data. Sparse data is basically a bunch of flat datapoints. Neural
+nets are searching for a minima so they are just randomly wandering from point
+to point trying to find a minima. This explains their weakness as well as the
+time it takes to process. 
+
+In my eyes, it's a flat line with a random spike here or there. The goal is to
+find the lowest spike. 
+
+A neural net works much better when dealingwith data that allows for more data
+at each point, able to treat the data as a gradient and working the dataframe
+like a parabola, quickly finding a minima. 
+
+This makes sense when looking at the neural net activation function - which either
+follows a step-like function or a Gaussian distribution per this source:
+https://www.quora.com/Why-are-deep-neural-networks-so-bad-with-sparse-data
+I probably should look at the neuralnet source code but based off the warning
+"Algorithm did not converge within the stepmax" I will state neural net utilizes 
+a step-like function
+
+I found a paper from October 2020 that basically summed up neural nets as an
+area of further research for optimization problems with sparse data - which I 
+take as meaning there is no solution/reason for applying neural nets to sparse data.

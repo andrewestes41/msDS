@@ -1,0 +1,197 @@
+---
+title: "Module6"
+author: "Andrew Estes"
+date: "4/22/2022"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(keras)
+library(knitr)
+```
+
+```{r}
+k_clear_session()
+model <- application_resnet50(weights = 'imagenet')
+#summary(model)
+```
+
+# 1
+Downloads the CIFAR-10 image set and saves the dog and frog photos in the appropriate directories. (This can be lifted verbatim from the code I used. Once you've used it once, you can comment it out or otherwise set it not to run so that you're no re-creating the directories more than once.)
+```{r}
+cifar <- dataset_cifar10()
+cifar$train$x <- cifar$train$x[cifar$train$y %in% c(5, 6), , , ]/255
+cifar$train$y <- cifar$train$y[cifar$train$y %in% c(5, 6)]
+cifar$train$y <- factor(if_else(cifar$train$y == 5, "Dog", "Frog"))
+cifar$test$x <- cifar$test$x[cifar$test$y %in% c(5, 6), , , ]/255
+cifar$test$y <- cifar$test$y[cifar$test$y %in% c(5, 6)]
+cifar$test$y <- factor(if_else(cifar$test$y == 5, "Dog", "Frog"))
+```
+
+```{r, eval=FALSE}
+par(mfrow=c(1,2))
+plot.new(); plot.window(xlim=c(0,1), ylim=c(0,1), asp=1)
+rasterImage(cifar$train$x[1, , , ], 0, 0, 1, 1)
+text(x=0.5, y=0.1, label=cifar$train$y[1], cex=2, col="white")
+plot.new(); plot.window(xlim=c(0,1), ylim=c(0,1), asp=1)
+rasterImage(cifar$train$x[7, , , ], 0, 0, 1, 1)
+text(x=0.5, y=0.1, label=cifar$train$y[7], cex=2, col="white")
+```
+
+```{r}
+#dir.create("Train")
+#dir.create("Test")
+#for(lab in levels(cifar$train$y)){
+#  dir.create(paste0("Train/", lab))
+#  dir.create(paste0("Test/", lab))
+#}
+#for(i in 1:dim(cifar$train$x)[1]){
+#  png::writePNG(cifar$train$x[i, , , ],
+#                paste0("Train/", cifar$train$y[i], "/img", i, ".png")) 
+#}
+#for(i in 1:dim(cifar$test$x)[1]){
+#  png::writePNG(cifar$test$x[i, , , ],
+#                paste0("Test/", cifar$test$y[i], "/img", i, ".png")) 
+#}
+#rm(cifar)
+```
+
+```{r}
+training_image_gen <- image_data_generator(
+  width_shift_range = 0.2,
+  height_shift_range = 0.2,
+  # I really want to try to train on the serif/sans details, so the next two
+  # ensure that letters are in a variety of orientations.
+  rotation_range = 20,
+  horizontal_flip = TRUE,
+  validation_split=0.2
+)
+training_image_flow <- flow_images_from_directory(
+  directory = "Train/",
+  generator = training_image_gen,
+  subset = "training",
+  class_mode = "binary",
+  batch_size = 20,
+  target_size = c(32, 32),
+  # Randomizing inputs is important so that the NN doesn't get stuck in a rut.
+  # It's the default, but I've put it in explicitly.
+  shuffle = TRUE
+)
+# A separate directory and generator could be used with a fixed validation set.
+validation_image_flow <- flow_images_from_directory(
+  directory = "Train/",
+  generator = training_image_gen,
+  subset = "validation",
+  class_mode = "binary",
+  batch_size = 20,
+  target_size = c(32, 32),
+  shuffle = FALSE
+)
+```
+
+```{r}
+test_image_gen <- image_data_generatio()
+
+test_image_flow <- flow_images_from_directory(
+  directory = "Test/",
+  generator = test_image_gen,
+  subset = "test",
+  class_mode = "binary",
+  batch_size = 20,
+  target_size = c(224, 224),
+  # Randomizing inputs is important so that the NN doesn't get stuck in a rut.
+  # It's the default, but I've put it in explicitly.
+  shuffle = TRUE
+)
+
+test_validation_image_flow <- flow_images_from_directory(
+  directory = "Test/",
+  generator = test_image_gen,
+  subset = "validation",
+  class_mode = "binary",
+  batch_size = 20,
+  target_size = c(224, 224),
+  shuffle = FALSE
+)
+```
+
+
+\newpage
+# 2
+Train a regular (non-convolutional) network on the image data for at least 30 epochs (you can go farther if you want to--how high does validation accuracy go if you've got a lot of time?).
+```{r}
+freeze_weights(model)
+
+dfmodel <- keras_model_sequential() %>%
+  # Pre-built resnet50 model.
+  model %>% 
+  # My additions to find dogs and frogs.
+  layer_dense(units=256, activation="relu") %>%
+  layer_dropout(rate=0.2) %>%
+  layer_dense(units=1, activation="sigmoid") %>%
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+dfmodel %>% fit(
+  x=training_image_flow,
+  validation_data=valid*ation_image_flow,
+  epochs=2
+)
+
+#accuracy from 77.4% to 81.92%
+
+#1153 seconds
+
+pred <- model %>% predict(validation_image_flow)
+pred.classes <- bind_rows(imagenet_decode_predictions(pred, top=1))
+table(pred.classes$class_description)
+```
+
+
+\newpage
+# 4 and 5
+Train a convolutional neural network on the same data set for at least 30 epochs (again, more if you want).
+
+Plot validation accuracy and evaluate accuracy on the test set for this model.
+```{r}
+dfnn <- keras_model_sequential() %>%
+  # Note that layer_dense expects a "flat" vector, not an image, so we add
+  # layer_flatten first.
+  layer_flatten() %>%
+  layer_dense(units=256, activation="relu", input_shape=c(224, 224, 3)) %>%
+  layer_dropout(rate=0.2) %>%
+  layer_dense(units=1, activation="sigmoid") %>%
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+dfnn %>% fit(
+  x=training_image_flow,
+  validation_data=validation_image_flow,
+  epochs=15
+)
+#1712 second with 15 epochs
+#max accuracy of 50.15%
+
+```
+
+\newpage
+# 6
+Write a paragraph, along with a table of results, that compares how well each of these models did in accurately predicting dog or frog. The table should have columns for accuracy, number of epochs and time it took to run on your computer. (Time can be can just be added up by hand from the on-screen output of the fit command.)
+```{r}
+Title <- c("Accuracy", "Epochs", "Seconds", "Minutes/Epoch")
+RegularNN <- c(81.92, 2, 1153, round(1153/60/2))
+Convolutional <- c(51.15, 15, 1712, round(1712/60/2))
+
+
+           
+results <- data.frame(Title, RegularNN, Convolutional)
+kable(results)
+```
+A regular neural network outperformed a convolutional neural network by all measurements (timeliness and accuracy). This is unsurprising as the book this problem comes from notes a 46% accuracy. Fine tuning the CNN model can increase the accuracy to 75%, which is still less than a non-convolutional neural network and requires much effort and time. 
+
+A 30-epoch assessment would take 7 hours for the CNN to process and 6 hours for the non-convolutional network to run. Given time considerations, I am concluding this prior to running more in-depth analysis.

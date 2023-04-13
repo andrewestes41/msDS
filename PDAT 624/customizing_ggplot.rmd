@@ -1,0 +1,216 @@
+---
+title: "Adding Elements to ggplot"
+author: "Scott Thatcher"
+date: "3/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries and Data
+
+We'll load tidyverse and make a copy of the Star Wars data set.
+
+```{r}
+library(tidyverse)
+sw <- starwars
+```
+
+# Objective
+
+My objective is the make a graph of character heights, separated by whether
+the character is a Droid, Human, or other, and showing each character as a
+data point. Additionally, I'd like to ad a segment next to the dots for each
+group showing the mean and standard deviation of the group. Finally, I'd like
+the main characters from the first movie to stand out.
+
+# Step 0: Sketch out what you want!
+
+- What should your graph look like?
+
+- What do you need to get there?
+
+# Step 1: Add Variables to the Data Frame
+
+`ggplot` likes to deal with data frames. So, it's usually a good idea to
+encode any extra information needed by the plot as a data frame column. I need
+two new variables:
+
+- whether the character is Droid, Human or Other, and 
+
+- whether the character is one of Luke, Leia, Han Solo, Chewbacca,
+  R2-D2 or C-3PO.
+
+So, I'll make two new columns called `Species` and `Main`.
+
+Sometimes it makes sense to pre-calculate these columns, and other times it
+makes sense to create them as you pipe the data frame into the `ggplot` 
+command. We'll see both approaches.
+
+```{r}
+sw <- sw %>%
+  mutate(Main = name %in% c("Luke Skywalker", "C-3PO", "R2-D2", "Leia Organa",
+                            "Chewbacca", "Han Solo")) %>% 
+  mutate(Species = factor(case_when(
+    species == "Human" ~ "Human",
+    species == "Droid" ~ "Droid",
+    TRUE ~ "Other"
+  )))
+```
+
+It usually makes sense to test your graph one step at a time. Here's the first
+pass at pulling out those characters.
+
+```{r}
+sw %>% ggplot() +
+  geom_point(aes(x=Species, y=height, color=Main))
+```
+
+
+
+# Step 2: Calculate Statistics and Subsidiary Data Frames
+
+To make the segments show mean and standard deviation of each group, I need
+those statistics. Since I need summary statistics for each group, it doesn't
+make sense to embed them in the original data frame or calculate them on
+the fly. The easiest way to do it is to make a secondary data frame.
+
+```{r}
+sw.stat <- sw %>%
+  group_by(Species) %>%
+  summarize(mean=mean(height, na.rm=TRUE),
+            lower=mean(height, na.rm=TRUE)-sd(height, na.rm=TRUE),
+            upper=mean(height, na.rm=TRUE)+sd(height, na.rm=TRUE))
+sw.stat
+```
+
+# Step 3: Get the basic structure right.
+
+Before trying anything too fancy, it's usually good to make sure that you're
+getting all the basic relationships of data to graph element correct. Let's
+make a graph to check those basic correspondences. Do we see points and lines
+as we'd expect?
+
+```{r}
+sw %>%
+  ggplot() +
+  geom_point(aes(x=Species, y=height, color=Main)) +
+  geom_point(data=sw.stat, aes(x=Species, y=mean)) +
+  geom_segment(data=sw.stat, aes(x=Species, xend=Species,
+                                 y=lower, yend=upper)) 
+```
+
+# Step 4: Add finishing touches.
+
+I want to offset the segments horizontally from the dots. I'll remember that
+since Species was a factor variable, it's levels are separated by a distance
+of "1" in the graph. So, I need to move the line a small fraction of that
+distance.
+
+Note that I found out about position_nudge as follows:
+
+- Looking up the options for `geom_point`, and seeing that the
+  `position` argument can be position adjustment function.
+
+- Typing ?position, then looking through the automatic suggestions 
+  until I found `position_nudge` and `position_jitter` (used later).
+ 
+```{r}
+sw %>%
+  ggplot() +
+  geom_point(aes(x=Species, y=height, color=Main)) +
+  geom_point(data=sw.stat, aes(x=Species, y=mean),
+             color="blue", position=position_nudge(x=0.2, y=0)) +
+  geom_segment(data=sw.stat, aes(x=Species, xend=Species,
+                                 y=lower, yend=upper),
+               color="blue", position=position_nudge(x=0.2, y=0))
+```
+ 
+
+```{r}
+sw %>%
+  ggplot() +
+  geom_point(aes(x=Species, y=height, color=Main),  
+             position=position_jitter(width=0.1, height=0)) +
+  geom_point(data=sw.stat, aes(x=Species, y=mean),
+             color="blue", position=position_nudge(x=0.2, y=0)) +
+  geom_segment(data=sw.stat, aes(x=Species, xend=Species,
+                                 y=lower, yend=upper),
+               color="blue", position=position_nudge(x=0.2, y=0)) +
+  # Finally, add decorations.
+  ggtitle("Comparison of Star Wars Character Heights by Species") +
+  ylab("Height (cm)")
+```
+
+Suppose I wanted the main characters to stand out at the left, but apply
+jitter to the other characters. Maybe this can be done with built-in
+commands, but it's also a good example of a situation where manual, but
+non-permanent manipulation of the data frame might be in order.
+
+```{r}
+sw %>%
+  mutate(Species = as.numeric(Species) + 
+           Main * (-0.2) + (!Main) * runif(nrow(sw), min=-0.1, max=0.1)) %>%
+  ggplot() +
+  geom_point(aes(x=Species, y=height, color=Main)) +
+   geom_point(data=sw.stat, aes(x=as.numeric(Species), y=mean),
+              color="blue", position=position_nudge(x=0.2, y=0)) +
+  geom_segment(data=sw.stat, aes(x=as.numeric(Species), xend=as.numeric(Species),
+                                 y=lower, yend=upper),
+               color="blue", position=position_nudge(x=0.2, y=0)) +
+  # Finally, add decorations.
+  ggtitle("Comparison of Star Wars Character Heights by Species") +
+  ylab("Height (cm)") +
+  scale_x_continuous(breaks=1:3, labels=levels(sw$Species))
+```
+Let's add the names of the main characters. Another good use for pipes and
+mutates?
+
+```{r}
+sw %>%
+  mutate(Species = as.numeric(Species) + 
+           Main * (-0.2) + (!Main) * runif(nrow(sw), min=-0.1, max=0.1)) %>%
+  mutate(name = if_else(Main, name, "")) %>%
+  ggplot() +
+  geom_point(aes(x=Species, y=height, color=Main)) +
+  geom_point(data=sw.stat, aes(x=as.numeric(Species), y=mean),
+             color="blue", position=position_nudge(x=0.2, y=0)) +
+  geom_segment(data=sw.stat, aes(x=as.numeric(Species), xend=as.numeric(Species),
+                                 y=lower, yend=upper),
+               color="blue", position=position_nudge(x=0.2, y=0)) +
+  # Finally, add decorations.
+  ggtitle("Comparison of Star Wars Character Heights by Species") +
+  ylab("Height (cm)") +
+  scale_x_continuous(breaks=1:3, labels=levels(sw$Species)) +
+  geom_text(aes(x=Species, y=height, label=name), hjust="right", nudge_x=-0.05) +
+  coord_cartesian(xlim=c(0.6, 3.2))
+```
+
+# Step 5: Do you need annotations?
+
+Annotations put single elements on the graph that don't correspond to data
+frame columns.
+
+```{r}
+sw %>%
+  mutate(Species = as.numeric(Species) + 
+           Main * (-0.2) + (!Main) * runif(nrow(sw), min=-0.1, max=0.1)) %>%
+  mutate(name = if_else(Main, name, "")) %>%
+  ggplot() +
+  geom_point(aes(x=Species, y=height, color=Main)) +
+  geom_point(data=sw.stat, aes(x=as.numeric(Species), y=mean),
+             color="blue", position=position_nudge(x=0.2, y=0)) +
+  geom_segment(data=sw.stat, aes(x=as.numeric(Species), xend=as.numeric(Species),
+                                 y=lower, yend=upper),
+               color="blue", position=position_nudge(x=0.2, y=0)) +
+  # Finally, add decorations.
+  ggtitle("Comparison of Star Wars Character Heights by Species") +
+  ylab("Height (cm)") +
+  scale_x_continuous(breaks=1:3, labels=levels(sw$Species)) +
+  geom_text(aes(x=Species, y=height, label=name), hjust="right", nudge_x=-0.05) +
+  coord_cartesian(xlim=c(0.6, 3.2)) +
+  annotate(geom="text", x=2.5, y=85, label="Porg") +
+  annotate(geom="segment", x=2.5, xend=2.65, y=75, yend=50, arrow=arrow())
+```

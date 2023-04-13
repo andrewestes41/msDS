@@ -1,0 +1,120 @@
+---
+title: "module3"
+author: "Andrew Estes"
+date: '2023-01-28'
+output: pdf_document
+---
+
+# Part 1
+Use this script to make a limited version of the AmesHousing Dataset and 
+make a quick scatterplot and linear model.
+
+```{r setup, message=FALSE, error=FALSE, warning=FALSE, echo=FALSE}
+#install.packages("synthpop")
+library(synthpop)
+library(AmesHousing)
+library(tidyverse)
+Ames <- make_ames()
+Ames_small <- Ames %>%
+  select(Gr_Liv_Area, Central_Air, Kitchen_Qual, Year_Sold, Sale_Price)
+
+ggplot(data=Ames_small, mapping = aes(x=Gr_Liv_Area, y=Sale_Price, color=Kitchen_Qual)) +
+  geom_point()+
+  geom_smooth(method="lm")
+
+Ames_lm <- lm(Sale_Price~.,data=Ames_small)
+Ames_lm
+
+summary(Ames_lm)
+```
+
+
+\newpage
+# Part 2
+Now, use the synthpop package, perhaps including the "syn" and "lm.synds" commands
+to make a scatter plot and a synthetic linear model of Ames_small.
+
+Discuss how it's different than the original linear model, if at all.
+```{r synthop, message=FALSE, error=FALSE, warning=FALSE, echo=FALSE}
+
+my.seed <- 17914709
+
+#parametric is the default method
+Ames_small_syn <- syn(Ames_small, minnumlevels = 5, seed = my.seed, method="parametric")
+summary(Ames_small_syn)
+
+#comparing dataset difference between synthesized and original df
+compare(Ames_small_syn, Ames_small, stat = "counts")
+
+
+ggplot(data=Ames_small_syn$syn, mapping = aes(x=Gr_Liv_Area, y=Sale_Price, color=Kitchen_Qual)) +
+  geom_point()+
+  geom_smooth(method="lm")
+
+Ames_syn_lm <- lm.synds(Sale_Price~.,data=Ames_small_syn)
+Ames_syn_lm
+
+summary(Ames_syn_lm, population.inference = TRUE)
+
+```
+The seemingly significant difference between the original data and the synthesized data is the loss of "poor" kitchen quality. The word seemingly was purposely chosen as there was only one observation of "poor" kitchen quality in the original dataset so the loss of this category is actually a boon to the model.
+
+It is hard to do an actual one-to-one comparison using the summary function due to the difference in the output. That being said, the coefficients are similar to one another as is the synthesized data to the original data so I feel comfortable stating that the two models performed similarly. 
+
+\newpage
+# Part 3
+Then, take a few minutes to check out another feature of synthpop (or another package) 
+and explain what you found.
+
+Implement it in a version of Ames_small and explain briefly what the feature does.
+
+```{r further research, message=FALSE, error=FALSE, warning=FALSE, echo=FALSE}
+#devtools::install_github("EmilHvitfeldt/gganonymize")
+
+library(gganonymize)
+
+
+ggg <- ggplot(data=Ames_small_syn$syn, mapping = aes(x=Gr_Liv_Area, y=Sale_Price, color=Kitchen_Qual)) +
+  geom_point()+
+  geom_smooth(method="lm")
+
+
+gganonomize(ggg)
+
+
+```
+
+The synthpop package creates a simulated dataframe using parameters from the original data. 
+Now there isn't anything particularly identifying about kitchen quality but I 
+wanted to try the gganonymise function to see a new output.
+
+\newpage
+# Bonus
+Not really sure what I'm doing here. 
+Pretty much copy + paste from https://github.com/brubinstein/diffpriv
+It has something to do with calclating theoretical sensitivity analysis
+```{r bonus, message=FALSE, error=FALSE, warning=FALSE}
+## a target function we'd like to run on private data X, releasing the result
+target <- function(Ames_small_syn) mean(Ames_small_syn)
+
+#install.packages("diffpriv")
+library(diffpriv)
+## target seeks to release a numeric, so we'll use the Laplace mechanism---a
+## standard generic mechanism for privatizing numeric responses
+mech <- DPMechLaplace(target = target)
+
+## set a dataset sampling distribution, then estimate target sensitivity with
+## sufficient samples for subsequent mechanism responses to achieve random
+## differential privacy with confidence 1-gamma
+distr <- function(n) rnorm(n)
+mech <- sensitivitySampler(mech, oracle = distr, n = 5, gamma = 0.1)
+#> Sampling sensitivity with m=285 gamma=0.1 k=285
+mech@sensitivity    ## DPMech and subclasses are S4: slots accessed via @
+
+X <- c(0.328,-1.444,-0.511,0.154,-2.062) # length is sensitivitySampler() n
+r <- releaseResponse(mech, privacyParams = DPParamsEps(epsilon = 1), X = X)
+cat("Private response r$response:   ", r$response,
+  "\nNon-private response target(X):", target(X))
+
+```
+

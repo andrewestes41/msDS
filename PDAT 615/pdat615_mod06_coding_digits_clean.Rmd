@@ -1,0 +1,314 @@
+---
+title: Module 6 Coding Lab, Part 1
+subtitle: Digit Recognition
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Set-up
+
+First, we'll load some of the usual packages. 
+
+```{r Packages}
+library(tidyverse)
+library(caret)
+library(keras)
+library(e1071)
+library(randomForest)
+```
+
+# Digit Recognition
+
+## The Image Data
+
+Let's look at the digit recognition problem used in _An Introduction to
+Statistical Learning_, which was itself modeled after some of the
+[tutorials and vignettes for the `keras` package](https://cran.r-project.org/web/packages/keras/).
+
+The first bit of code loads the MNIST dataset of hand-written digits, which 
+includes a default training and testing set so that results can be compared
+against benchmarks.
+
+```{r}
+mnist <- dataset_mnist()
+x_train <- mnist$train$x
+g_train <- mnist$train$y
+x_test <- mnist$test$x
+g_test <- mnist$test$y
+```
+
+What have we loaded? The train and test sets are, by default, three-dimensional
+arrays, with the first dimension identifying the image itself, and the second
+and third dimensions defining the 28x28 images.
+
+```{r}
+dim(x_train)
+dim(x_test)
+summary(x_train)
+par(mfcol=c(1,3))
+image(x_train[1, , ], col=gray.colors(256))
+image(x_train[2, , ], col=gray.colors(256))
+image(x_train[3, , ], col=gray.colors(256))
+```
+
+The `g_train` and `g_test` objects give the true values of the digit.
+
+```{r}
+head(g_train, 3)
+```
+
+In this example, we'll be treating these images as vectors of values, rather
+than square grids of pixels. In other words, we'll treat each images as simply
+28x28 = 784 measurements of different variables.  We could do this reshaping
+using built-in R commands, but `keras` offers the `array_reshape` command, which
+takes the original array and a vector of dimension sizes for the resizing.
+
+```{r}
+x_train <- array_reshape(x_train , c(nrow(x_train), 784))
+x_test <- array_reshape(x_test , c(nrow(x_test), 784))
+# Gray-scale images are often coded with pixel intensities between 0 and 255,
+# but the modeling commands often do better with pixels values between 0 and 1.
+x_train <- x_train/255
+x_test <- x_test/255
+```
+
+The `to_categorical` command converts a multi-class integer vector into a
+"one-hot" encoding--in other words, a set of 0/1 indicator variables.  This
+re-encoding is something that is done automatically by most R modeling commands
+we've used with the formula interface, but needs to be done explicitly here.
+
+```{r}
+y_train <- to_categorical(g_train , 10)
+y_test <- to_categorical(g_test , 10)
+```
+
+## Other Methods
+
+We could try any of our old methods to create a digit classifier, but it turns
+out that the commands run slowly enough that I wasn't willing to wait for them.
+A data set with 784 explanatory variable columns and 60,000 rows appears to be
+a challenge for these algorithms---at least in terms of speedy execution. In a
+future lab, we'll see a solution to that issue.
+
+In the code below, I've added the `eval=FALSE` chunk option so that the code
+chunks won't run when the document it knitted.
+
+R methods can use the response variable as a factor.
+
+```{r}
+g_train_fct <- factor(g_train)
+```
+
+### Random Forest
+
+Here's a plain old random forest. I didn't have the patience to wait for it to 
+finish.
+
+```{r eval=FALSE}
+fit.rf <- randomForest(y=g_train_fct, x=x_train, ntree=100)
+```
+
+### Support Vector Machine
+
+Here's a support vector machine from the `e1071` package. Similarly, it spend
+a lot of time not finishing. Linear kernel is selected to start with because
+we already have a 784-dimensional space, and using a radial basis kernel may
+not be needed if we can already draw a good dividing hyperplane between digits
+in that original high-dimensional space.
+
+```{r eval=FALSE}
+fit.svm <- svm(y=g_train_fct, x=x_train, kernel="linear")
+confusionMatrix(predict(fit.svm, newdata=predict(x_train_pca, x_test)[, 1:20]), factor(g_test))
+```
+
+## Using Keras
+
+### An Extemely Simple Neural Network
+
+Our SVM above didn't run very fast. But one way to see "about" how accurate
+an SVM with a linear kernel might be would be to create a neural network with no
+hidden layer--just input weights and output nodes. That would give a model that
+creates separating hyperplanes in the original space, just like an SVM would.
+
+First we'll create the architecture of the model.
+
+```{r}
+# Step 1: Create an empty "sequential" model.
+fit.nn <- keras_model_sequential()
+# Step 2: Use pipes to add layers to the neural network. Here just an output.
+fit.nn %>% layer_dense(input_shape=c(784), units=10, activation="softmax" )
+# Not necessary, but good to check we've done what we think:
+summary(fit.nn)
+```
+
+Next we'll prepare the model to be run by setting the loss function with
+determines what a "good" fit is, the optimizer that actually searches for a good
+fit, and the metric displayed to show the model's progress.
+
+All this is layered on to the original model by piping through the `compile`
+command.
+
+```{r}
+fit.nn %>% compile(
+  loss="categorical_crossentropy",
+  optimizer=optimizer_rmsprop(),
+  metrics=c("accuracy")
+)
+```
+
+Finally, we'll fit the model with the `fit` command, where we  supply
+
+- the data,
+
+- how many `epochs` (times through the whole data set) we'll run,
+
+- the `batch_size` (how many data points are considered at the same time), and
+
+- a `validation_split` percentage that determines how much of the original
+  training data is used instead to validate, or monitor how well the model is
+  doing.
+
+```{r}
+history <- fit.nn %>% fit(
+  x=x_train, y=y_train,
+  epochs=30,
+  batch_size=128,
+  validation_split=0.20
+)
+```
+
+In RStudio, we get a real-time readout, but we can also plot the result directly.
+
+```{r}
+plot(history)
+```
+
+In my run, we see accuracy on both training data approaching about 93%, and the
+run took about 30 seconds---much better than our previous tries!
+
+In my run, we also see the counter-intuitive result that early on the model
+seems to do better on the validation set than on the training set
+itself--usually overfitting means that models perform better on the training
+data. By the end of the run, we might be seeing overfitting starting to happen.
+
+We can also check accuracy against the pre-determined test set or create
+predictions on new data.
+
+```{r}
+fit.nn %>% evaluate(x=x_test, y=y_test)
+# Here's the do-it-yourself accuracy calculation using `predict`
+# First we get the column with the largest "probability."
+fit.nn.pred <- fit.nn %>% predict(x=x_test) %>% 
+  apply(MAR=1, FUN=which.max) 
+# Then plug that index into the actual list of values.
+cat.vec <- 0:9
+fit.nn.pred <- cat.vec[fit.nn.pred]
+mean(fit.nn.pred == g_test)
+```
+
+
+### A Neural Network with Hidden Layers
+
+We'll consolidate code now, and try a neural network with two hidden layers.
+A few notes:
+
+- The first layer needs the `input_shape` option set to tell the network what
+  to expect from the data fed into the model.
+  
+- Interior layers are using the "relu" activation function, which is speedier
+  than fancier activation functions.
+  
+- The last layer uses the "softmax" activation which produces a logistic like
+  "S" curve as output---good for determining final probabilities, etc.
+
+```{r}
+fit.hidden <- keras_model_sequential() %>%
+  layer_dense(units=256, activation="relu", input_shape=c(784)) %>%
+  layer_dense(units=128, activation="relu") %>%
+  layer_dense(units=10, activation="softmax") %>%
+  compile(
+    loss="categorical_crossentropy",
+    optimizer=optimizer_rmsprop(),
+    metrics=c("accuracy")
+  )
+history <- fit.hidden %>% fit(
+  x=x_train, y=y_train,
+  epochs=30,
+  batch_size=128,
+  validation_split=0.20
+)
+```
+
+Note that we're now at about 98% accuracy for the validation set, and also with
+the test set:
+
+```{r}
+fit.hidden %>% evaluate(x=x_test, y=y_test)
+```
+
+### Adding Dropout Layers
+
+Remember that dropout layers help randomize the structure of the neural net
+during each of the training stages. They do that by randomly omitting certain
+connections when different data points are run through the model. This can
+help generated a more general model where particular nodes don't over-specialize.
+Will drop-out layers do better?
+
+```{r}
+fit.drop <- keras_model_sequential() %>%
+  layer_dense(units=256, activation="relu", input_shape=c(784)) %>%
+  layer_dropout(rate=0.4) %>%
+  layer_dense(units=128, activation="relu") %>%
+  layer_dropout(rate=0.3) %>%
+  layer_dense(units=10, activation="softmax") %>%
+  compile(
+    loss="categorical_crossentropy",
+    optimizer=optimizer_rmsprop(),
+    metrics=c("accuracy")
+  )
+history <- fit.drop %>% fit(
+  x=x_train, y=y_train,
+  epochs=30,
+  batch_size=128,
+  validation_split=0.20
+)
+```
+
+Hard to say! Doesn't look like they added too much in this particular case.
+We've still got validation and test set accuracy around 98%.
+
+```{r}
+fit.drop %>% evaluate(x=x_test, y=y_test)
+```
+
+## Notable Points
+
+### Keras model training picks up where you left off.
+
+```{r}
+history <- fit.drop %>% fit(
+  x=x_train, y=y_train,
+  epochs=30,
+  batch_size=128,
+  validation_split=0.20
+)
+plot(history)
+```
+
+### Keras models update in place as a result of piping.
+
+I believe this is a result of the way the R commands interact with persistant
+underlying Python objects.
+
+### Tuning
+
+There are several "handles" for model tuning in this approach:
+
+- Number of hidden layers.
+
+- Number of nodes per layer.
+
+- Use of dropout layers.
+
+- Batch size and epochs.

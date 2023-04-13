@@ -1,0 +1,103 @@
+---
+title: "Loop Indexing Tricks"
+author: "Scott Thatcher"
+date: "3/21/2022"
+output: html_document
+---
+
+Suppose we want to store the values of a multiplication table: All the possible
+products of all the numbers from 1 to 3 (so that all the results are easy to
+see). In other words, we want a data structure that contains
+1*1, 1*2, 1*3, 2*1, 2*2, 2*3, 3*1, 3*2, and 3*3.
+
+Here are a few ways to do that!
+
+# One long vector, indexed from 1 to 9
+
+```{r}
+vec <- numeric(3*3)  # This initializes a numeric vector with 9 0's.
+for(i in 1:3){
+  for(j in 1:3){
+    vec[j + 3*(i-1)] <- i*j
+  }
+}
+vec
+```
+
+# Indexed as a matrix
+
+Using a matrix to store values makes the indexing easier, but you have to
+deal with turning a matrix back into another structure if you don't want
+a matrix at the end of the day.
+
+```{r}
+mat <- matrix(nrow=3, ncol=3)    # This initializes a matrix of NA's
+for(i in 1:3){
+  for(j in 1:3){
+    mat[i, j] <- i*j
+  }
+}
+mat
+as.numeric(mat)
+```
+
+# Using c (with vectors) or rbind (with data frames or matrices)
+
+This method can be slower because you cause more memory management as you
+continually change the size of your final target object. But, if speed isn't an
+issue, it can be simplest.
+
+(It's good form to initialize first in most languages, but R allows this
+"build-it-as-you-go" construction.)
+
+If your created object in each run of the loop is a row or column of a larger
+object, you might add to a data frame with rbind or cbind, rather than using
+"c" to add to a vector.)
+
+```{r}
+vec <- numeric()  # Here we start with an empty object to add to in the loop.
+for(i in 1:3){
+  for(j in 1:3){
+    vec <- c(vec, i*j)
+    # vec            # Uncomment the start of the line to see vec being built up.
+  }
+}
+vec
+```
+
+A variation that might be useful if some part of your calculation was
+vectorizable:
+
+```{r}
+vec <- numeric()  # Here we start with an empty object to add to in the loop.
+for(i in 1:3){
+  tmp.vec <- i*(1:3)  # Here I can vectorize part of the multiplication.
+  vec <- c(vec, tmp.vec)
+}
+vec
+```
+
+# The `pmap` commands loop without looping over two variables.
+
+These commands from the `purrr` package emmulate what you would get from a
+double loop and create the final object at the same time. The `expand.grid`
+command will be very useful in the next few modules--it just creates the list
+of all pairs of numbers.
+
+```{r}
+library(tidyverse)
+expand.grid(1:3, 1:3)            # Let's see what it does.
+# pmap iterates through every row of values in the data frame and applies the
+# given function.
+vec <- pmap_dbl(expand.grid(1:3, 1:3), ~ .x * .y)
+vec
+```
+
+From base R, the `outer` command does something similar and creates a matrix
+as a result, but it requires a function that can be vectorized to start with,
+so it's not always universally useful:
+
+```{r}
+outer(1:3, 1:3, function(x, y){x*y})
+```
+

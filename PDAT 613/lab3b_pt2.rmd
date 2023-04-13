@@ -1,0 +1,70 @@
+---
+title: "lab3b"
+author: "Andrew Estes"
+date: "2/9/2022"
+output: pdf_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, error=FALSE, warning=FALSE, tidy.opts=list(width.cutoff=60)) 
+```
+
+Assignment: Module 3B, Part 1.
+
+For this homework assignment, you'll be looking at creating a graphical "dashboard" to display data related to environmental conditions and occupancy in a particular office. You can find the data set at the UCI Machine Learning Repository:
+https://archive.ics.uci.edu/ml/datasets/Occupancy+Detection+
+
+Read about the data set, download it, and extract the contents from the ZIP file. We won't be using it for its original purpose (classification of occupancy status). Instead, we'll be looking to create graphical summaries.
+
+We will only be using the training data set, because it provides one contiguous time period.
+In this first part of the assignment, I'd like you to think about the data, look at the ranges of values, make some preliminary graphs---whatever you need to do to get a sense for what's in the data file. Nothing needs to be turned in from this section.
+```{r cars}
+library(tidyverse)
+library(lubridate)
+occ <- read.csv("datatraining.txt")
+occ <- occ %>%
+  mutate(Date=ymd_hms(date)) %>% select(-date) %>%
+  mutate(Occupancy=factor(Occupancy, labels=c("Not Occupied", "Occupied")))
+view(occ)
+
+#i wonder if we should drop humidity ratio since that is the direct result of two other columns/variables (temperature and humidity). 
+#it is surely highly multi-colinear
+
+```
+
+
+Suppose you work for the building managers, and they've tasked you with creating a graphical dashboard that will help answer three questions:
+
+1) "We'd like a time series plot of Temperature, Humidity and CO2 levels, which will differentiate between when the office is occupied and when it isn't occupied."
+
+2) "We start to get complaints of bad air quality and low worker productivity if the CO2 level rises above 1000 ppm. The time series plot should additionally make it clearly visible when this happens."
+
+4) "For each day, we'd like the know the percentage of occupied time in which the CO2 level is above 1000."
+
+```{r}
+#do temperature and humidity on the same graph, 2-lines each
+#make co2 on separate graph and make red shading when over 1000ppm
+  #create side area that shows the % of time CO2 is above 1000ppm
+```
+
+
+3) "We're interested in the average values for Temperature, Humidity and CO2 when the office is occupied and when it isn't."
+```{r}
+#barplot with scaled/normalized values
+
+```
+
+5) Finally, keep in mind that the building managers aren't statisticians, and might not know exactly what they want. What you produce should answer their questions, but perhaps you can do better than what they asked for
+```{r}
+#analyze occupancy rate by month, day, date, and time. Maximize occupancy -> maximize revenue
+  #on the flipside, high demand -> higher prices -> higher revenue
+
+#analyze the electricity usage. If it remains relatively constant, as the manager you can offer electricity as a perk in exchange for a higher portion of rent. 
+
+#compare with local weather - weather station (Chievres Airport, Belgium) was downloaded from a public data set from Reliable Prognosis (rp5.ru)) - http://math.oit.edu/~overholserr/current/math407/notes/practiceMidterm.pdf 
+  #autocorrelation (occupancy lags weather by 1-day?)
+
+#an out of the box idea is to make each variable the response variable. this could be of scientific use. the business use of the science is application to local universities research. a local school may provide funding to their teachers/students to perform more analysis that can help further reduce expenses and increase profitability studying more than the 7 variables studied originally
+
+```
+

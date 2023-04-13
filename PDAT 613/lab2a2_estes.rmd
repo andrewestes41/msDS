@@ -1,0 +1,190 @@
+---
+title: "2a2_estes"
+author: "Andrew Estes"
+date: "1/15/2022"
+output: pdf_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning=FALSE, tidy.opts=list(width.cutoff=60)) 
+```
+
+# Installing libraries, packages, and datasets
+```{r, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+library(tidyverse)
+library(MASS)
+library(leaps)
+library(car)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(e1071)
+library(pROC)
+
+insurance <- read.csv("Insurance_A.csv", colClasses=c('numeric', 'factor', 'numeric', 'numeric', 'factor', 'factor', 'numeric'))
+```
+
+
+# 1) Consider the Insurance_A.csv data set again. This time, load the data and create a training and testing set using the following (for repeatability):
+
+```{r}
+#creating training/test datasets
+set.seed(8940)
+ins <- sample(1:nrow(insurance), 0.70*floor(nrow(insurance)))
+ins.train <- insurance[ins, ]
+ins.test <- insurance[-ins, ]
+```
+
+## A) the training set to create a regression, CART and random forest model to predict expenses using all the other variables.
+## B) For each model, calculate RMSE using the test set. Comment on how well each model predicts expenses.
+```{r}
+#linear model
+ins.lm <- lm(expenses ~., data=ins.train)
+ins.train.lm.pred <- predict(ins.lm, newdata= ins.train)
+RMSE(ins.train$expenses, ins.train.lm.pred)
+
+ins.test.lm.predict <- predict(ins.lm, newdata = ins.test)
+RMSE(ins.test$expenses, ins.test.lm.predict)
+
+ins.step <- step(ins.lm, trace=0)
+ins.test.step.pred <- predict(ins.step, newdata=ins.test)
+RMSE(ins.test$expenses, ins.test.step.pred)
+```
+The linear model has a MRSE between 6034.733 abd 6078.724.
+
+```{r}
+#CART model
+ins.rpart <- rpart(expenses ~., data=ins.train)
+ins.test.rpart.pred <- predict(ins.rpart, newdata=ins.test) 
+RMSE(ins.test$expenses, ins.test.rpart.pred)    
+```
+The CART model has a RMSE of 5391.953.
+
+```{r}
+#random forest model
+ins.rf <- randomForest(expenses ~ ., data=ins.train)
+ins.test.rf.pred <- predict(ins.rf, newdata=ins.test)
+RMSE(ins.test$expenses, ins.test.rf.pred)
+ins.rf
+```
+The Random Forest model has a RMSE of 5018.99.
+
+## C) Remembering the residual plot from the first assignment, there were some unexplained clumps in the residuals. Briefly explain why those residuals might suggest that a tree-based predictor could be more accurate.
+A clear grouping in the residual plots shows that there is a distinction between two (or more) groups that can be split by at least one variable. A tree-based method would likely show the most important variable, separate the group, and create a more accurate picture. 
+
+## D) Compare RMSE on the test set with the out-of-bag RMSE for the random forest model. How close are they?
+```{r}
+RMSEoob <- sqrt(22412374)
+RMSEoob
+```
+The Random Forest out-of-bag RMSE is 4734.171. 
+
+## E) Plot the tree diagram for the CART model.
+```{r}
+rpart.plot(rpart(expenses ~., data=ins.train))
+```
+
+
+## F) Plot the variable importance calculated from the random forest model.
+```{r}
+varImpPlot(ins.rf)
+```
+
+## G) Using the results from part (e) and part (f), comment on which variables seem to be important in predicting expenses, and in which context each is important. How does this compare to what you saw in the first assignment?
+The variables maintain the same level of importance in both CART and RF. Smoking status is the first predictor, followed by Age and BMI. It has a similar output to the first assignment where smoking was the crucial variable, followed by a combination of Age, BMI, Gender, Children, and Region. The CART output would be my preference based off the limited number of variables/nodes it broke the data into. 
+
+
+\newpage
+# 1) Download the data set dry_bean_dataset.csv. This data set comes from a recent paper by Murat Koklu and Ilker Ali Ozkan that explored using various geometric measures of dry beans to identify their variety. This classification is important in the seed industry, where providing uniform seed supplies is important. The data set consists of measurements of 13611 dry beans which come from 7 varieties. The variety of bean is identified in the Class variable, and all other variables contain geometric measures derived from imaging of the beans.
+
+## A) Load the data set, and create testing and training sets (this time, you can code it as you like).
+```{r}
+drybeans <- read.csv("beans.csv")
+drybeans$Class <- as.factor(drybeans$Class)
+
+set.seed(65489)
+beans <- sample(1:nrow(drybeans), 0.70*floor(nrow(drybeans)))
+beans.train <- drybeans[beans, ]
+beans.test <- drybeans[-beans, ]
+```
+
+## B) Create CART, random forest, and SVM classification models for bean variety, calculate and report on the accuracy of each model.
+```{r}
+#CART
+beans.rpart <- rpart(Class ~., data=beans.train)
+beans.test.rpart.pred <- (predict(beans.rpart, newdata=beans.test))
+rpart.plot(rpart(Class ~., data=beans.train))
+mean(beans.test.rpart.pred)
+```
+The mean is .143, equivalent ot a .857 accuracy method. 
+
+```{r}
+#random forest model
+beans.rf <- randomForest(Class ~., data=beans.train)
+beans.test.rf.pred <- predict(beans.rf, newdata=beans.test)
+confusionMatrix(beans.test.rf.pred, beans.test$Class)
+```
+Confusion matrix shows an overall accuracy of .923 with a 95% Confidence Interval of .914 and .931.
+
+```{r}
+#SVM
+beans.svm <- svm(Class ~., data=beans.train)
+beans.svm.pred <- predict(beans.svm, newdata=beans.test)
+confusionMatrix(beans.svm.pred, beans.test$Class, positive="TRUE")
+```
+The Confusion Matrix has an overall accuracy of .93 with a 95% Confidence Interval of .921 and .937.
+
+
+## C) The link above leads to the paper abstract, which contains information on the accuracy obtained by the authors for decision tree (DT) and SVM models, among others. Write a short explanation of how your (untuned) models compared to the stated accuracies in the abstract.
+The accuracy numbers provided by the confusion matrices in the SVM and Decision Tree (Random Forest) was comparable to the author's numbers (.93 vs .9313 and .923 vs .925). 
+
+## D) The abstract also breaks down the SVM model's accuracy on each variety separately. How does your SVM model compare? You might have to figure out how to calculate your model's accuracy in predicting a single variety.
+The author's classification for each bean class surprisingly varied quite a bit from my models. With the author's accuracy first, the results are as follows: Barbunya (.924 vs .878) , Bombay (1.0 vs 1.0), Cali (.95 vs .951), Dermason (.944 vs .922), Horoz (.949 vs .959), Seker (.947vs .955) and Sira (.868 vs .9).
+
+
+## E) The abstract claims that the author's SVM model had an accuracy of 86.84% in predicting the SIRA variety. Let's see how a logistic regression model can do at predicting whether a bean is of the SIRA variety or not.
+
+### E1) First create a response variable that indicates whether the bean is SIRA variety or not.
+```{r}
+sira.train <- as.numeric(beans.train$Class == "SIRA")
+beans.train$Class = sira.train
+
+sira.test <- as.numeric(beans.test$Class == "SIRA")
+beans.test$Class = sira.test
+```
+### E2) Next, create a logistic regression model to predict this new binary variable.
+```{r}
+#logistic regression
+beans.log.train.pred <- glm(Class ~ ., data=beans.train, family="binomial")
+summary(beans.log.train.pred)
+```
+AIC of 2577.1.
+
+### E3) Use your test set to estimate the accuracy of the logistic regression model in predicting SIRA.
+```{r}
+#logistic regression
+beans.log.test <- glm(Class ~., data=beans.test, family="binomial")
+summary(beans.log.test)
+
+odds <- predict(beans.log.train.pred, beans.test, type="response")
+beans.odds <- ifelse(odds > .5, "SIRA", "NOT SIRA")
+table(beans.odds)
+```
+
+### E4) Compare that accuracy to the article author's SVM model.
+Different measures of accuracy for SVM and Logistic Regression.
+AIC of 410.3
+Using the predict function, it predicted 19.8% of beans were SIRA.
+The ROC Curve provided 98.5% accuracy (something must be wrong with the way I calculated it - likely using the same dataset rather than a new one).
+Plotted graphs are below. 
+
+```{r}
+plot(beans.log.test)
+plot(odds)
+plot(beans.test$Class)
+
+test_prob <- predict(beans.log.train.pred, beans.test, type="response")
+test_roc <- roc(beans.test$Class ~ test_prob, plot = TRUE, print.auc = TRUE)
+```
+

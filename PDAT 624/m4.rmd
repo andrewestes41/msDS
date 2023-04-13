@@ -1,0 +1,57 @@
+---
+title: "m4&5"
+author: "Andrew Estes"
+date: '2022-11-17'
+output: pdf_document
+---
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(colorspace)
+library(patchwork)
+library(forecast)
+library(zoo)
+library(xts)
+library(janitor)
+library(knitr)
+library(TTR)
+library(viridis)
+library(randtests)
+library(gridExtra)
+library(plotly)
+```
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+orig.nba <- read.csv("nba2018.csv")
+nba <- orig.nba
+```
+
+# 1) Allows the user to choose two teams that will be compared by the graph(s) in the app.
+
+# 2) Allows the user to choose two variables that will be compared in a scatter plot. 
+
+Note: to do this, you might investigate the .data pronoun in ggplot, 
+which can be used like this: 
+  aes(.data[[x_var]], .data[[y_var]]), 
+where x_var and y_var represent the names of variables stored as character strings.
+
+# 3) Creates a scatter plot of the two chosen variables, using color to show which team each data point belongs to.
+
+# 4) Uses plotly to render the graph in the app, 
+either by creating the graph with ggplot, then using ggplotly to create the plotly graph, OR 
+by using plot_ly and related commands directly. 
+You'll need to use the renderPlotly and plotlyOutput commands to do that.
+
+# 5) Creates nicely-formated pop-up text for each data point that contains 
+each player's name, along with any other information you believe is valuable.
+```{r}
+#scatterplot Offensive Rebounds (OREB) vs Defensive Rebounds (DREB)
+p <- ggplot(nba) +
+  geom_point(aes(x=DREB, y=OREB, color=TEAM)) 
+ggplotly(p)
+
+```
+

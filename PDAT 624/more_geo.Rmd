@@ -1,0 +1,246 @@
+---
+title: "Spatial Data Operations"
+author: "Scott Thatcher"
+date: "April 12, 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+# Installation note: To get the "rnaturalearthhires" package, you'll have to do
+# the following:
+#
+# install.packages("devtools")
+# devtools::install_github("ropensci/rnaturalearthhires")
+#
+# The rnaturalearthhires is large and not hosted on CRAN.
+# You may or may not see other messages about upgrading packages when you run
+# the devtools command. I chose the upgrade from CRAN option.
+#
+# Along the way, I was also prompted to install the rgeos packages:
+# install.packages("rgeos")
+
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(raster)
+library(stars)
+# install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
+library(spDataLarge)
+# This last command is related to a change in how the sf package handles
+# coordinates. It has moved from a backend that treats projected coordinates as
+# lying on a plane to a backend (s2) that treats coordinates as lying on a sphere
+# (the Earth). Although the later method is arguably more correct, it can cause
+# some errors in previously working code, when some map objects may not convert
+# quite right. This command reverts to the old behavior.
+sf_use_s2(FALSE)
+```
+
+# Introduction
+
+Here is some code that summarizes things we saw in the last lecture on the
+`sf` package. We should get a map of Missouri with an underlying topographical
+layer, a boundary in blue, and our simplistic local map of cities and roads
+superimposed on top.
+
+```{r}
+# Make a map of Missouri
+#map_sf <- ne_states(country="united states of america", returnclass="sf")
+#mo_sf <- map_sf[map_sf$name=="Missouri", "region"]
+mo_sf <- st_as_sf(maps::map(database="county", regions="missouri", plot=FALSE, fill=TRUE))
+
+# Define our own data frame.
+local <- data.frame(
+  name = c("Kirksville", "Columbia", "St. Louis", "Kansas City", "US63", "I70")
+)
+# Define our spacial elements
+kv <- st_point(x = c(-92.61, 40.17))
+co <- st_point(x = c(-92.33, 38.95))
+st <- st_point(x = c(-90.20, 38.63))
+kc <- st_point(x = c(-94.58, 39.10))
+# Note that individual points are stored in the _rows_ of the matrices.
+us63 <- st_linestring(x = matrix(c(-92.61, 40.17,
+                                   -92.33, 38.95),
+                                 nrow=2, byrow=TRUE))
+i70 <- st_linestring(x = matrix(c(-94.58, 39.10,
+                                  -92.33, 38.95,
+                                  -90.20, 38.63),
+                                nrow=3, byrow=TRUE))
+# At this stage, individual elements are combined into an sf "column."
+local_sfc <- st_sfc(kv, co, st, kc, us63, i70)
+# That sf column is then combined with the regular columns of the data frame.
+local_sf <- st_sf(local, local_sfc, crs=4326)
+
+tmap_mode("plot")
+# install.packages("OpenStreetMap")
+# see ?openmap for type list
+mo_topo <-read_osm(mo_sf, type="https://a.tile.opentopomap.org/{z}/{x}/{y}.png")
+mo_topo <- as(mo_topo, "Raster")
+tm_shape(mo_topo) + tm_rgb() +
+  tm_shape(mo_sf) + tm_borders(col="blue", lwd=2) +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_shape(local_sf[1:4,]) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5)
+
+local_raster <- raster(
+  nrows = 2,
+  ncols = 3,
+  # res = ,	# Note: You could set res, rather than nrows and ncols.
+  xmn = -95.5,	# These are latitude and longitude limits.
+  xmx = -89.5,
+  ymn = 38.5,
+  ymx = 40.5,
+  vals = c(1, 17000, 1,				# Populations (approx.)
+           460000, 121000, 319000)
+)
+
+```
+
+
+# Spatial Operations on Vector Data
+
+We've seen that `sf` data structures can be treated like data frames, and their
+data columns can be used to do all the usual things:
+
+- filter,
+
+- group_by and summarize,
+
+- join, etc.
+
+The geometry column of the `sf` data structure can also be used to do these
+sorts of operations! In order to do these operations using geometry, rather
+than regular data types, we need to define _topological relations_ that can
+indicate when two geometries are related.
+
+## Topological Relations
+
+The `sf` package includes several topological relations as R functions:
+
+- `st_intersects(a, b)`: Does any part of geometry a intersect  geometry b?
+
+- `st_disjoint(a, b)`: Is geometry a disjoint from b?
+
+- `st_within(a, b)`: Is geometry a completely within geometry b?
+
+- `st_touches(a, b)`: Is geometry a touching geometry b?
+
+- `st_is_within_distance(a, b)`: Is geometry a within a certain distance of b?
+
+Since a geometry column can contain many features, the output of these functions
+is essentially a matrix.
+
+```{r}
+# By default a "sparse" matrix is generated, which only lists the parts that
+# DO overlap.
+st_intersects(local_sf, mo_sf)
+# The sparse=FALSE option creates an actual matrix.
+# Rows represent features from the first object;
+# columns are features from the second.
+st_intersects(local_sf, mo_sf, sparse=FALSE)
+```
+
+### Filtering (Subsetting)
+
+These topological operations can be used to filter. For example, suppose we
+wanted to map only those counties that our "roads" traveled through.
+
+```{r}
+# Note that the base-R syntax of [] indexing can be used as a short-cut.
+# This syntax means "take all rows of mo_sf" that intersect with local_sf."
+mo_sf[local_sf, ] %>%
+  tm_shape() + tm_borders(col="blue") +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_shape(local_sf[1:4,]) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5)
+```
+
+```{r}
+# The `op` option can set the topological relation used.
+# dist is in units specified in the crs (see the `st_crs` command).
+mo_sf[local_sf, , op=st_is_within_distance, dist=50000] %>%
+  tm_shape() + tm_borders(col="blue") +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_shape(local_sf[1:4,]) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5)
+```
+
+
+```{r}
+# The `st_filter` command works similarly to the tidyverse "filter."
+# Default relation is "intersects."
+mo_sf %>% st_filter(local_sf) %>% 
+  tm_shape() + tm_borders(col="blue") +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_shape(local_sf[1:4,]) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5)
+```
+
+```{r}
+# It's sometimes nice to know the "long" way with a regular filter command.
+# Here we create a logical vector that's TRUE whenever there is at least
+# one intersection. The `lengths` command tells us how many intersections each
+# county has with our local_sf. This method can also help you create permanent
+# indicator variables in the data frame by using the `mutate` command.
+mo_sf %>% filter(lengths(st_intersects(., local_sf)) > 0) %>%
+  tm_shape() + tm_borders(col="blue") +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_shape(local_sf[1:4,]) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5)
+```
+
+### Grouping
+
+Topological operations can be used to group features together, as well.
+Here we just want the shape of our highway corridor.
+
+```{r}
+mo_sf %>% group_by(lengths(st_intersects(x=., y=local_sf)) > 0) %>% 
+  summarize() %>%
+  tm_shape() + tm_borders(col="blue") +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_shape(local_sf[1:4,]) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5)
+```
+
+
+### Joining
+
+What if I wanted to pull the county labels from the mo_sf map into my local
+data frame to replace the cities?
+
+```{r}
+# The default join behavior is a left join when elements intersect.
+# So, data from counties that intersect our local map will be joined to
+# our local map. We'll do it in steps to see the result.
+local_county_sf <- local_sf %>% st_join(mo_sf) 
+local_county_sf
+ggplot(local_county_sf) +
+  geom_sf() +
+  geom_sf_label(data=local_county_sf[1:4,], aes(label=ID))
+```
+
+
+### Measurements
+
+The `sf` package allows measurements of area, length and distance with
+`st_area`, `st_length` and `st_distance`.
+
+The units package does everything you might need regarding units, including
+changing them with `set_units`.
+
+We can get the area of Adair county:
+
+```{r}
+library(units)
+mo_sf %>% filter(ID=="missouri,adair") %>% st_area() %>% set_units("mile^2")
+```
+
+```{r}
+st_distance(local_sf) %>% set_units("mile")
+```
+

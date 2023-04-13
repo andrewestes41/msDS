@@ -1,0 +1,197 @@
+---
+title: "lab3_assignment"
+author: "Andrew Estes"
+date: '2022-11-05'
+output: pdf_document
+---
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(colorspace)
+library(patchwork)
+library(forecast)
+library(zoo)
+library(xts)
+library(janitor)
+library(knitr)
+library(TTR)
+library(viridis)
+library(randtests)
+library(gridExtra)
+```
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+orig.monarchs <- read.csv("playfair_monarchs.csv")
+monarchs <- orig.monarchs
+monarchs <- monarchs %>%
+  mutate(reign = end - start) %>%
+  mutate(y = c(99, 100,99, 100, 99, 100, 99, 100,99, 100, 99, 100)) %>%
+  mutate(text.pos = .5*(start+end))
+
+orig.wheat <- read.csv("playfair_wheat.csv")
+wheat <- orig.wheat
+
+wheat <- wheat %>%
+  mutate(Ratio = round((Wheat/Wages), 2)) %>%
+  mutate(Diff = Wheat - Wages)
+```
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+#Cox Stuart Test (null hypothesis says there is no trend)
+coxWheat <- cox.stuart.test(wheat$Wheat)
+coxWages <- cox.stuart.test(wheat$Wages)
+
+#Mann Kendall Rank Test (null hypothesis says there is no trend)
+mannWheat <- rank.test(wheat$Wheat)
+mannWages <- rank.test(wheat$Wages)
+
+#Turning Point Test (null hypothesis says the variable is independent)
+turningWheat <- turning.point.test(wheat$Wheat)
+turningWages <- turning.point.test(wheat$Wages)
+
+rand <- data.frame(Test = c("Cox Stuart", "Mann Kendall", "Turning Point"),
+                   Wheat = c(coxWheat$p.value, mannWheat$p.value, turningWheat$p.value),
+                   Wages = c(coxWages$p.value, mannWages$p.value, turningWages$p.value))
+```
+
+# Part 1: Critique of Playfair's Visualization
+Playfair created a time-series visualization showing the cost of wheat along with the wages of a good mechanic over a 256-year time period. In addition to these two pieces of information, there are clear vertical lines demarcating the various British monarchs.
+
+There is quite a bit of information on the graph. Starting from the top of the graph, the arches at the top denoting the centuries are not useful - the years are denoted at the bottom. I'm also unsure why the monarchs are located at different levels or why the bar denoting their reign may or may not be colored. The "watermark" takes up a significant portion of the graph and focus is immediately drawn to that, rather than the information he is trying to convey visually. 
+
+The bar chart is a questionable way to visualize the data. I don't understand the rationale behind using the bar chart to display wheat prices but a line to display wages. Perhaps it was due to price of ink, or perhaps because the line plot is overlayed onto the bar chart, it is weird that the bar chart is not fully saturated. If ink price is a concern, then I'm not sure why the area under the weekly wage line was fully saturated in blue. 
+
+Critiques aside, it appears based off the appendix commentary that the main driver was to analyze Adam Smith's question of tying labor wages to wheat prices. Adam Smith looked only at the numerical/tabular data and was unsure if that was a good idea or not. Graphically though, it is clear to see that the fluctuations in wheat prices would be near impossible to keep in line with wages. For this purpose, the graph is successful. 
+
+\newpage
+# Part 2: Re-Creation of Playfair's Visualization
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+a <- ggplot() +
+  geom_col(data=wheat, aes(x=Year, y=Wheat), width=5) +
+  geom_area(data=wheat, aes(x=Year, y=Wages), color="red", fill="blue", size=1.5)
+
+
+a <- a + 
+  scale_x_continuous(breaks=seq(1565, 1825,20)) +
+  scale_y_continuous(breaks=seq(0, 120, 5), position="right") +
+  labs(title = "CHART Showing at One View The Price of Quarterly Wheat & Wages of Labour by the week from The Year 1565 to 1821", 
+  y = "Price of the Quarter of Wheat in Schillings",
+  x = "Five Years Each Division")
+
+
+b <- a +
+  geom_segment(data=monarchs, aes(x=start, xend=end, y=y, yend=y)) 
+
+b +
+  geom_text(aes(x = monarchs$text.pos, y = c(97, 102, 97, 102, 97, 102, 90, 102, 97, 102, 97, 102), label = monarchs$name))
+
+#a +
+#  geom_rect(aes(xmin = start,
+#                xmax = end,
+#                ymin = 110,
+#                ymax = 120,
+#                fill = name),
+#            data = monarchs,
+#            show.legend = FALSE) +
+#  geom_text(aes(x = start,
+#                y = 110,
+#                label = name,
+#                angle = 45),
+#            data = monarchs)
+```
+
+
+
+
+
+
+\newpage
+# Part 3: New Visual Representation
+```{r, echo=FALSE, eval = FALSE}
+z <- ggplot() +
+  geom_area(data=wheat, aes(x=Year, y=Wheat), color="grey", fill="black") +
+  geom_area(data=wheat, aes(x=Year, y=Wages), color="green", fill="green") +
+  geom_line(data=wheat, aes(x=Year, y=Ratio), color="red", fill="red", size=2)
+z
+
+#cox.stuart.test(wheat$Wheat)
+#mank kendall rank test
+#Wald wolfowitz
+#turning point test
+```
+
+```{r, echo=FALSE, eval = FALSE}
+m <- ggplot() +
+  geom_line(data=wheat, aes(x=Year, y=Wheat), color="grey", fill="black") +
+  geom_line(data=wheat, aes(x=Year, y=Wages), color="green", fill="green") 
+
+m <- m +
+  geom_ribbon(aes(x=wheat$Year,
+                  ymin = wheat$Wages,
+                  ymax = wheat$Wheat),
+              fill = "black")
+
+m + 
+  scale_x_continuous(breaks=seq(1565, 1825,20)) +
+  scale_y_continuous(breaks=seq(0, 100, 5), position="right") +
+  labs(title = "CHART Showing the Gap Between The Price of Quarterly Wheat & Wages of Labour by the week from The Year 1565 to 1821", 
+  y = "Price of the Quarter of Wheat in Schillings",
+  x = "Five Years Each Division")
+
+#it would make more sense to subtract wages from wheat price, create a filled line chart to show the change using 0 as the baseline
+```
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+b <- ggplot() +
+    geom_rect(aes(xmin = start,
+                xmax = end,
+                ymin = 0,
+                ymax = 120,
+                fill = name),
+            data = monarchs,
+            show.legend = FALSE) +
+  geom_text(aes(x = start,
+                y = 80,
+                label = name,
+                angle = 90),
+            data = monarchs)
+
+b <- b +
+  geom_area(data=wheat, aes(x=Year, y=Diff), color="black", fill="black", size=1)
+
+
+b <- b +
+  scale_x_continuous(breaks=seq(1565, 1825,20)) +
+  scale_y_continuous(breaks=seq(0, 100, 20), position="right") +
+  labs(title = "CHART Showing the Difference Between The Price of Quarterly Wheat & Wages of Labour by the week from The Year 1565 to 1821",
+  y = "Price (in Schillings) Between Wheat and Wage",
+  x = "Year")
+
+
+t1 <- tableGrob(rand, theme=ttheme_minimal(), rows=NULL)  # transform into a tableGrob
+grid.arrange(b, t1, nrow=2)
+```
+
+
+\newpage
+# Part 4: Explanation for Choice Behind the New Visual Representation
+
+For my graph, I thought Playfair's was a great point to launch from. Instead of a bar graph and line curve, I thought a simpler visualization showing the difference between wheat prices and wages would work. I also included the monarchs as their policies likely played a role in these financial numbers (although weather would probably be more correlated for wheat than monarch).
+
+For the colors, the monarchs came in this bright rainbow assortment. I thought it was fine to use with the only issue being James II's very short reign causing readability issues with his successor's William and Mary. Given the brightness of the monarch reigns, it was clear and evident that a contrast was needed to show the differences in pricing throughout the years. You can't go wrong with black so that is what I chose. It also adds some continuity with the monarch's as their names are in black. 
+
+
+I also made a table showing the three randomness tests ran on the wheat and wage data. 
+  The Cox Stuart Test (null hypothesis says there is no trend)
+  The Mann Kendall Rank Test (null hypothesis says there is no trend)
+  The Turning Point Test (null hypothesis says the variable is independent)
+
+As the table clearly shows, there is no significance with Wheat and plenty of significance with Wage. 
+The table could certainly be cleaned up. 
+Some concerns with the randomness tests are the applicability towards the data. If we are expecting a non-normal distribution (like we do with wage) then there may be better tests or additional criteria to add to the existing tests. 
+Further research could look at seasonality to see if there is a non-linear trend with Wheat.
+

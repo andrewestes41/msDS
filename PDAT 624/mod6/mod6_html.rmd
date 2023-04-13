@@ -1,0 +1,122 @@
+---
+title: "mod6"
+author: "Andrew Estes"
+date: '2022-12-03'
+output: html_document
+---
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(raster)
+#install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
+library(spDataLarge)
+library(stars)
+library(leaflet)
+library(mapview)
+library(RColorBrewer)
+```
+
+# 1) The first data set, FoodAccessResearchAtlasData2019.csv, comes from the USDA, and contains multiple variables related to measures of food insecurity. A README file and data dictionary are also provided. The data is provided at the level of individual census tracts, which are smaller than counties. Load the data file, and do the following:
+
+A) Make sure to account for the fact that missing values are represented by "NULL" in the data file. You want those to be imported as NA's. There's an option to set in your read command to do that.
+
+B) After loading the entire data set, filter to keep only those data points from Missouri.
+
+C) The CensusTract variable will be important for combining data sets later. Convert it to a character vector.
+```{r}
+df <- read.csv("C:\\Users\\andre\\OneDrive\\Desktop\\PDAT 624\\FoodAccessResearchAtlasData2019.csv", na.strings=(''))
+
+df <- df %>%
+  filter(State == "Missouri") %>%
+  mutate(CensusTract = as.character(CensusTract))
+  
+```
+
+# 2) The second data file, gz_2010_29_140_00_500k.zip, comes from the Census Bureau, and contains the outline data for all the census tracts in Missouri. To use this file, do the following:
+
+A) Unzip the file in the same directory as your .Rmd file (or in a subdirectory). It contains several files, and it's important to keep them together in the same spot.
+
+B) Use the read_sf command to read the census tract shapes into an sf object. You want to read the file with the .shp file extension.
+
+C) The sf object you create has several attached variables that describe the census tracts, including STATE, COUNTY, and TRACT. Combine these into a new character column called CensusTract.
+```{r}
+df.census <- read_sf("C:/Users/andre/OneDrive/Desktop/PDAT 624/gz_2010_29_140_00_500k.shp")
+
+df.census.2 <- unite(df.census, 
+                   col = 'CensusTract',
+                   c('STATE','COUNTY','TRACT')) %>%
+  mutate(CensusTract = as.character(CensusTract)) %>%
+  mutate(CensusTract = gsub('_','',CensusTract))
+```
+
+
+# 3) Join the shape data from Step 2 with the data frame from Step 1 to get a combined sf object. (It would probalby be a good thing at this point to make sure that you can get a map from this object, although you don't have to include the map in your final homework.)
+```{r}
+df.join <- merge(df.census.2, df)
+```
+
+# 4) The last data set, Grocery_Store_Map_for_Active_Living__Healthy_Lifestyle_Dashboard_Cleaned.csv, comes from KCMO in Kansas City, and gives location data for stores that sell groceries in the Kansas City area.
+
+A) Read in the data set.
+
+B) Then convert the data set into an sf object using st_as_sf.
+```{r}
+grocer <- read.csv("C:\\Users\\andre\\OneDrive\\Desktop\\PDAT 624\\Grocery_Store_Map_for_Active_Living__Healthy_Lifestyle_Dashboard_Cleaned.csv", na.strings=(''))
+
+grocer <- grocer %>%
+  mutate(Longitude = Longitude) %>%
+  mutate(Latitude = Latitude)
+
+grocer.sf <- st_as_sf(grocer, coords=c("Longitude", "Latitude"), crs=4326)
+```
+
+# 5) Because the Census tract shape data covers the whole state of Missouri, you probably want to cut it down to only those census tracts around Kansas city before going further. There are multiple ways to do this, and we've gone over some in the lectures. You might do some research and find the correct county codes, or you might use the store location data along with st_filter.
+```{r, warning=FALSE}
+df.new <- df.join %>%
+  filter(County == c("Jackson County", "Platte County", "Clay County", "Cass County"))
+
+```
+
+
+# 6) Create two maps, one static using ggplot or tmap, and one active using tmap. Both should show the following:
+
+A) Census tract boundaries in the area around Kansas City. It's OK to have a slightly wider area than contained in the store location data set, but you want the map to show the store locations nicely.
+
+B) Fill color for the census tracts representing a variable from the food insecurity data set that you feel might be especially interesting. (For example, the fill color might represent proportion of people who don't live within a mile of a grocery store, or it might represent poverty rate. The final choice is yours.)
+
+C) Locations of stores that sell groceries superimposed on that Census tract map, color-coded by the Facility.Type variable.
+
+```{r}
+ggplot() +
+  geom_sf(data=grocer.sf, aes(color=Facility.Type)) +
+  geom_sf(data=df.new, aes(fill=CENSUSAREA))
+
+```
+D) For the interactive map only, included code that creates a well-formatted popup for each store. The pop-up should contain information that's useful for the human reader.
+```{r}
+tmap_mode(mode = "view")
+
+tm_basemap() +
+  tm_shape(df.new) +
+  tm_polygons(col="CENSUSAREA", id="CENSUSAREA", title="CENSUSAREA", alpha = 0.5) +
+  tm_shape(grocer.sf) +
+  tm_dots(col="Facility.Type") +
+  tm_layout(legend.outside = TRUE)
+```
+
+
+
+# 7) Finally, after all that's done, write a paragraph or so that comments on any patterns you see in the graph. Depending on your choice of tract-level variable to display, you might see a strong trend or not see much of a trend. That's OK. Comment on what you see. Is there any relationship between store location/type and the variable you choice to display?
+
+
+In the U.S., census tracts are "designed to be relatively homogeneous units with respect to population characteristics, economic status, and living conditions" and "average about 4,000 inhabitants." The density of grocery stores in KCMO makes sense with the density of census areas in the heart of the city. LIkewise, the lack of grocery stores in the outskirts of the city makes sense as the amount of land covered by a census tract increases (lower population density = less grocery stores).
+
+
+# 8) Once all this is done, knit your document into HTML (which will preserve the interactive map). I believe you'll have to ZIP that file before submitting it to Blackboard, because Blackboard sees certain HTML files as security risks.
+
+

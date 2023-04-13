@@ -1,0 +1,234 @@
+---
+title: "M3_assignment"
+author: "Andrew Estes"
+date: '2022-08-18'
+output: pdf_document
+---
+
+```{r, include=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+#loading libraries
+library(tidyverse)
+library(lubridate)
+library(colorspace)
+library(patchwork)
+library(forecast)
+library(zoo)
+library(xts)
+```
+
+
+# 2B) Make scatterplot
+```{r, include = FALSE}
+#creating dataframe
+orig.df <- read.csv("austinClimate.csv")
+
+#copying the original dataframe
+df <- orig.df
+
+#removing unnecessary data from df (info never changes)
+df <- df %>%
+  select(-NAME) %>%
+  select(-STATION) %>%
+  mutate(AVERAGE = (TMAX + TMIN)/2)
+
+#changing the DATE format from character to Date
+df$DATE <- as.Date(df$DATE)
+#class(df$DATE)
+```
+
+```{r, warning=FALSE, error=FALSE, echo=FALSE}
+plot(df$DATE, df$TMAX, 
+     col="red", 
+     main="Scatterplot of Daily Temperature", 
+     xlab='DATE', 
+     ylab='Temperature')
+points(df$DATE, df$TMIN, col="blue")
+points(df$DATE, df$AVERAGE, col='black')
+legend(100, 75, 
+       legend=c('Max Temp', 'Min Temp', 'Avg Temp'), 
+       col=c('red', 'blue','black'))
+```
+
+```{r, include=FALSE, warning=FALSE, error=FALSE}
+#for some reason there is a giant section of missing data between 12/31/1971 10/15/1992. 
+#in addition to those 20 years, there are another 89 missing rows
+ggplot(data = df, aes(DATE, TMAX)) + 
+  geom_point() 
+  ggtitle("Daily Maximum Temperature")
+```
+
+```{r, include=FALSE, warning=FALSE, error=FALSE}
+#scatterplot of minimum daily temperature, 147 values removed plus all the missing dates
+ggplot(data = df, aes(DATE, TMIN)) + 
+  geom_point() 
+  ggtitle("Daily Minimum Temperature")
+```
+
+\break
+# 2B) Simple linear regression
+```{r, warning=FALSE, error=FALSE}
+df_lm_max <- lm(TMAX ~ DATE, data = df)
+summary(df_lm_max)
+```
+\break
+```{r, warning=FALSE, error=FALSE}
+df_lm_min <- lm(TMIN ~ DATE, data = df)
+summary(df_lm_min)
+```
+
+\break
+
+# 2C) Play around with weather
+```{r, include=FALSE, warning=FALSE, error=FALSE}
+avg_box <- 
+  ggplot(data = df, aes(DATE > 1980, AVERAGE)) + 
+  geom_boxplot()
+
+max_box <- 
+  ggplot(data = df, aes(DATE > 1980, TMAX)) + 
+  geom_boxplot()
+
+min_box <- 
+  ggplot(data = df, aes(DATE > 1980, TMIN)) + 
+  geom_boxplot()
+```
+
+```{r, echo=FALSE, message=FALSE, error=FALSE, warning=FALSE}
+max_box + avg_box + min_box
+```
+
+
+
+\break
+# 2C) Playing around with data after subsetting data into before and after dataframes
+```{r, include=FALSE}
+a <- subset(df, DATE < 1980)
+b <- subset(df, DATE > 1980)
+```
+
+```{r, include=FALSE, warning=FALSE, error=FALSE}
+a_max <- 
+  ggplot(data = a, aes(DATE, TMAX)) + 
+  geom_point() +
+  geom_smooth() +
+  ylim(10, 115)
+
+b_max <-
+  ggplot(data = b, aes(DATE, TMAX)) + 
+  geom_point() +
+  geom_smooth() +
+  ylim(10, 115)
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, error=FALSE}
+a_max + b_max
+```
+
+```{r, include=FALSE}
+newA <- a %>%
+  separate(DATE, c("YEAR", "MONTH", "DAY")) %>%
+  mutate(DECADE = floor(as.numeric(YEAR)/10)*10) %>%
+  ggplot(aes(x=MONTH, y=TMAX, color=YEAR, group=YEAR)) + 
+  geom_line() +
+  scale_colour_viridis_d()
+
+newB <- b %>%
+  separate(DATE, c("YEAR", "MONTH", "DAY")) %>%
+  mutate(DECADE = floor(as.numeric(YEAR)/10)*10) %>%
+  ggplot(aes(x=MONTH, y=TMAX, color=YEAR, group=YEAR)) + 
+  geom_line() +
+  scale_colour_viridis_d()
+
+new <- df %>%
+  separate(DATE, c("YEAR", "MONTH", "DAY")) %>%
+  mutate(DECADE = floor(as.numeric(YEAR)/10)*10) %>%
+  ggplot(aes(x=MONTH, y=TMAX, color=YEAR, group=YEAR)) + 
+  geom_line() +
+  scale_colour_viridis_d()
+
+newD <- df %>%
+  separate(DATE, c("YEAR", "MONTH", "DAY")) %>%
+  mutate(DECADE = floor(as.numeric(YEAR)/10)*10) %>%
+  ggplot(aes(x=MONTH, y=TMAX, color=DECADE, group=DECADE)) + 
+  geom_smooth() 
+```
+
+\break
+# 2C) Look at average maximum temperature by month, separated by decade
+```{r, echo=FALSE, warning=FALSE, message=FALSE, error=FALSE}
+newD
+```
+
+```{r, include=FALSE}
+ts.A <- ts(data=a$TMAX, start=c(1948, 03, 01), frequency=1)
+ts.A <- as.xts(ts.A)
+
+ts.B <- ts(data=b$TMAX, start=c(1948, 03, 01), frequency=1)
+ts.B <- as.xts(ts.B)
+
+gg.acf.A <- ggAcf(ts.A)
+gg.acf.B <- ggAcf(ts.B)
+gg.pacf.A <- ggPacf(ts.A)
+gg.pacf.B <- ggPacf(ts.B, na.action = na.pass)
+```
+
+\break
+# 2C) Look at partial auto-correlation
+```{r, echo=FALSE}
+gg.pacf.A + gg.pacf.B
+```
+
+
+```{r, include=FALSE}
+plot.ts(df$TMAX)
+```
+
+```{r, include=FALSE}
+log.tmax <- log(df$TMAX)
+plot.ts(log.tmax)
+```
+
+```{r, include=FALSE}
+#library(TTR)
+#sma.tmax <- na.omit(df$TMAX)
+#sma.tmax <- SMA(df$TMAX, n=3)
+#plot.ts(sma.tmax)
+```
+
+```{r, include=FALSE}
+#maxComp <- decompose(df$DATE, df$TMAX)
+```
+
+
+
+```{r, include=FALSE}
+#time series decomposition
+#polar chart - stability analysis
+```
+
+
+\break
+# 3) Report to Local Officals
+
+Good afternoon all,
+
+I have been tasked with analyzing maximum temperature change measured at the Austin Bergstrom International Airport. There is a large chunk of missing data between 1971 and 1991 for reasons lost to history. This does not impact the data’s validity as it gives us a clear separation of data to analyze. We can easily look at the data between 1948 and 1971 in one eye and look at the data between 1992 and 2022 in the other. 
+One of the first things I did was run a linear regression model to confirm the obvious: the date impacts the temperature.  The next step was to see if there was a noticeable difference in maximum, average, and minimum temperatures based upon the year. 
+```{r, warning=FALSE, message=FALSE, error=FALSE, echo=FALSE}
+max_box + avg_box + min_box
+```
+
+As you see in the boxplots, the median maximum temperature is slightly higher in recent years than earlier years. The median minimum temperature is slightly lower in recent years than earlier years. This indicates a wider range of temperature shifts in recent times which follows general knowledge of global warming effects. I must agree with the skeptics in the room that the change is relatively small and can be explained by non-human shifts. 
+The next graph you see though, shows slightly more patterns and more variation. The average line in the past three decades is consistently increasing. In the 1948-1971 range, it actually decreased. It appears the Austin is getting warmer and warmer while still undergoing very (relatively speaking) cold periods. 
+```{r, echo=FALSE, warning=FALSE, message=FALSE, error=FALSE}
+a_max + b_max
+```
+
+The final graph is perhaps the most telling. I averaged the max temperature for each month, then averaged each month’s max temperature by the decade of the recording. It is clear to see that the 2020 decade thus far has been much warmer, month over month, compared to prior decades. You may point out that the 2020 decade is only 3 years old (2020, 2021, 2022) which is valid, however look at the decade of the 2000s and compare it to the 1960’s. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, error=FALSE}
+newD
+```
+
+The Global Climate Concern of 2 degrees Celsius per century tracks to 1.46 degrees Fahrenheit over four decades. Looking at the graph, there has been an increase of over 2 degrees Fahrenheit. Austin’s temperature is increasing by more than the number defined by the Global Climate Concern. 
+Due to the rapid increase in temperature, there are several concerns to be discussed. Several of these concerns have already been the topic of discussion: water conservation, winter freeze, population and employment growth. Texas gets most of its water from a limited supply of areas called aquifers. If the water from the aquifers is consumed too quickly or there is an environmental issue, there is no replenishing them. The winter freeze in 2021 lead to death and mass destruction. Using policies to prevent that from happening would be wise, however creating mandatory building permits could be costly. Population and employment growth go hand-in-hand. They contribute to dwindling water sources as well as gentrification in the city. In addition to the social problems, they certainly cause additional CO2 exposure which will only make the future worse than the present. 

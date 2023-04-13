@@ -1,0 +1,124 @@
+---
+title: "Using manipulate for Interactive Graphs"
+author: "Scott Thatcher"
+date: "11/5/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(manipulate)
+```
+
+
+## Introduction to Interactive Visualizations
+
+Interactive visualizations can...
+
+- map additional variables (e.g. time as time!),
+
+- allow slice-by-slice exploration,
+
+- adjust aesthetics,
+
+- zoom in and out,
+
+- set up, then trigger a computation, etc., and
+
+- provide pop-up feedback to the user.
+
+[Visit Gapminder](https://www.gapminder.org/tools/), for a refresher!
+
+## `manipulate` creates simple interactive plots in RStudio.
+
+```{r eval=FALSE}
+manipulate(<plot code>, <control1>, <control2>, ...)
+```
+
+- `<plot code>` Code that generates a plot. Multiple commands can be put inside of {} .
+
+- `<control>` Expression of the form `param = control(…)`
+
+  - `slider` Choose a numeric value from a continuum.
+
+  - `picker` Choose a value from a list.
+  
+  - `checkbox` Toggle true/false values.
+  
+  - `button` Rerun `<plotcode>` with a parameter set to `TRUE`.
+  
+```{r}
+# Here's an example:
+manipulate(hist(rchisq(1000, df=x)), x=slider(1, 40))
+```
+
+```{r}
+# Let's keep the axis constant and show df.
+# Note the use of {}'s for multiple commands.
+manipulate({
+  hist(rchisq(1000, df=x), xlim=c(0, 80))
+  text(x=70, y=150, label=paste0("df = ", x))
+  },
+  x=slider(1, 40)
+)
+```
+
+
+```{r}
+# Here's a fancier example:
+manipulate({
+  if(gg==TRUE){
+    ggplot(data.frame(x=rchisq(1000, df=x))) +
+      geom_histogram(aes(x=x), breaks=seq(0, 80 , 5))
+  } else {
+    hist(rchisq(1000, df=x), xlim=c(0, 80))
+  }},
+  x=slider(1, 40),
+  gg=button(label="GGPlot!")
+)
+```
+
+## Making an Interactive Visualization
+
+- Step 1: Plan it out!
+
+- Step 2: Make a static graph.
+
+- Step 3: Replace hard-coded parameters with adjustable values.
+
+## You try!
+
+Use manipulate to visualize a statistical principle:
+
+- The median is resistant to outliers, but the mean is not.
+
+- A point separated horizontally from the rest of the data exerts
+  a large influence on the regression line.
+  
+- The shape of a normal distribution depends only on mean and
+  standard deviation.
+
+- Varying binwidth in a histogram changes the balance between
+  detail and summary.
+
+## Details to watch for.
+
+- When you animate a graph, do the axes stay constant, or does the
+  graph "jump around"?
+  
+  - Changes caused by user intervention are easier to see if
+    axes/other graph elements stay constant.
+  
+  - You might need to override R's default axis scaling, etc.
+  
+- Are control ranges appropriate?
+
+- Are controls intuitive/well-explained?
+
+- What data to use?
+
+  - Fixed or random?
+  
+  - Simulated or real?

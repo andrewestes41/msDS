@@ -1,0 +1,63 @@
+---
+title: "module1_part2"
+author: "Andrew Estes"
+date: "3/18/2022"
+output: pdf_document
+---
+```{r global_options, echo=FALSE}
+knitr::opts_chunk$set(message=FALSE, error=FALSE, warning=FALSE) 
+```
+
+```{r}
+#installing necessary libraries
+library(pROC)
+library(random)
+library(tidyverse)
+```
+
+
+```{r}
+#creating random number generator function
+random <- function(n){
+  rando <- randomNumbers(n = n, min = -1000000000, max = 1000000000, col = 1)
+}
+
+#making the dataframe
+df <- data.frame(random(1000))
+colnames(df) = c('Y')
+X <- seq(nrow(df))
+
+#finalizing the dataframe
+df <- df %>%
+  mutate(Factor = factor(case_when(
+    Y >= 0 ~ "Positive",
+    Y < 0 ~ "Negative"))) %>%
+  mutate(X = X)
+
+#viewing the data for understanding
+head(df)
+```
+
+\newpage
+
+```{r}
+#nice plot of output
+ggplot(df) +
+  geom_point(aes(x=X, y=Y, color=Factor))
+```
+
+\newpage
+
+```{r}
+#logistic regression prediction
+logit_predict <- predict(glm(Factor ~ X, family = binomial(link = "logit"), df))
+
+#ROC curve analysis
+roc <- roc(df$Factor, logit_predict)
+plot(roc) 
+```
+There is no relationship between the row number (as indicated in 1:n) and the 
+positive/negative classification. This is akin to using my grades to predict 
+the weather in Jakarta.  
+A graph like this should be  expected due to the randomness in the Response 
+variable and the patterned change in the Predictor variable (1:n by 1).

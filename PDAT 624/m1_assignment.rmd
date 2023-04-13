@@ -1,0 +1,59 @@
+---
+title: "m1_MO_health"
+author: "Andrew Estes"
+date: '2022-10-17'
+output: pdf_document
+---
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(colorspace)
+library(patchwork)
+library(forecast)
+library(zoo)
+library(xts)
+library(janitor)
+library(knitr)
+library(TTR)
+library(viridis)
+```
+
+```{r}
+orig.df<- read_excel("2016_MO_health.xls")
+df <- orig.df
+head(df)
+```
+
+```{r}
+#3 variables to compare
+  #df$ECON_TYP_2015 - The following types are mutually exclusive. Each county in the U.S. is assigned one economic type.
+      #Farming-dependent
+      #Mining-dependent
+      #Manufacturing-dependent
+      #Federal/State government-dependent
+      #Recreation
+      #Nonspecialized
+  #df$BINGE_YESP- % of respondents who have binge drinked in the past 30 days
+  #df$PHYS_NOP - % of persons who have smoked at least 100 cigarettes in their lifetime and still smoke occasionally
+
+ggplot(df, aes(x=SMOKE_CURRENTP, y=BINGE_YESP, color=factor(ECON_TYP_2015))) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE)
+  scale_fill_viridis(discrete=TRUE)
+```
+
+```{r}
+a <- ggplot(df, aes(SMOKE_CURRENTP, colour = factor(ECON_TYP_2015))) +
+  geom_density() +
+  theme(legend.position="none")
+
+b <- ggplot(df, aes(BINGE_YESP, colour = factor(ECON_TYP_2015))) +
+  geom_density()+
+  theme(legend.position="bottom")
+
+a + b
+```
+

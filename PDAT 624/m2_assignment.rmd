@@ -1,0 +1,95 @@
+---
+title: "m2_assignment"
+author: "Andrew Estes"
+date: '2022-10-18'
+output: pdf_document
+---
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(colorspace)
+library(patchwork)
+library(forecast)
+library(zoo)
+library(xts)
+library(janitor)
+library(knitr)
+library(TTR)
+library(viridis)
+```
+
+```{r, echo=FALSE}
+df <- mpg
+#head(df)
+
+avgCTY <- df %>%
+  group_by(year) %>%
+  summarize(avgCTY = mean(cty))
+
+avgHWY <- df %>%
+  group_by(year) %>%
+  summarize(avgHWY = mean(hwy))
+```
+
+
+# 1. A graph whose story appears to show that fuel economy decreased between 1999 and 2008.
+```{r, echo=FALSE}
+ggplot(df, aes(x=year, y=cty)) +
+  geom_point()
+```
+For this graph, we are trying to show a decrease in MPG between 1998 and 2008. To do this, I looked at only the data for city gas mileage. I did not account for class of car as compacts have much better mileage than trucks. There could have been more trucks purchased than compacts in 2008, but the one-to-one comparison would actually show an increase in mileage for trucks with an overall (or gestalt) affect showing a negative impact towards overall mileage. I also did not account for engine displacement, transmition, fuel type, or other variables that influence mpg. 
+
+As for the graph itself, I purposely left the gap in there as it made it seem as if there is a larger chasm than there actually is (there is only a .5 mpg difference in summarized mean of city mpg).
+
+
+\newpage
+# 2. A graph whose story appears to show that fuel economy increased between 1999 and 2008.
+```{r, echo=FALSE}
+ggplot(avgHWY, aes(x=year, y=(avgHWY))) +
+  geom_point() +
+  geom_line()
+```
+For this graph, we are showing an increase in mpg between 1998 and 2008. To do this, I grouped the data by year, summarized the data, and found the mean for highway mpg. There is only a slight increase in highway MPG, but using a non-zero base scale makes the increase seem enormous. As with the other graph, nothing else that could possibly impact mileage was considered.
+
+I used the line to indicate a clear and positive linear relationship, and kept the scale as-is to make it seem stronger than it actually is. 
+
+\newpage
+# 3. A graph that you feel best shows the true story of what happened between 1999 and 2008.
+```{r, echo=FALSE}
+newdf <- df %>%
+  mutate(avgMPG = (cty+hwy)/2) %>%
+  group_by(year, class)
+
+df99 <- newdf %>%
+  filter(year==1999) %>%
+  group_by(class) %>%
+  summarise(mean99 = mean(avgMPG))
+
+df08 <- newdf %>%
+  filter(year==2008) %>%
+  group_by(class) %>%
+  summarise(mean08 = mean(avgMPG))
+
+
+dftest <- merge(df99, df08, by="class")
+colnames(dftest) <- c("Class", "Avg99", "Avg08")
+dftest <- dftest %>%
+  mutate(Difference = round((Avg08 - Avg99), 2))
+
+p<-ggplot(data=dftest, aes(x=Class, y=Difference)) +
+  geom_bar(stat="identity")
+p
+```
+From my limited mechanical knowledge, I believe that the type or class of car is the leading indicator of fuel efficiency.
+Basing the graph off that thought, I found the average mpg for each class of car in both 1999 and 2008.
+
+Average mpg is determined by finding the mean of city mpg and highway mpg. True average mpg likely skews towards city driving, but a true number is not possible to calculate. 
+
+ I found the difference in MPG between 2008 and 1999 for each class of car. That is what is graphed above. Five of the seven vehicle classes actually increased in fuel efficiency, and despite the massive drop in subcompact efficiency, overall there was a positive increase of fuel efficiency of 0.27 mpg. 
+
+The one thing that would have been nice to add is a line plot showing the difference in number of vehicles by class, overlayed on top of this bar graph. It would have been interesting to see what, if any, patterns emerged. If there was a pattern, then it would become more of a philosophical discussion as to whether sales for subcompact cars decreased because of the fuel efficiency decreased, or if the fuel efficiency decreased because manufacturers were more focused on the other classes of vehicles.
+
+There is not a lot of data, and there is a large gap between these two years where quite a bit happened - weak economy from 1999-2002, the aftermath of September 11th, the Great Recession. In addition to these major macro factors, gas prices also steadily increased from sub-2 dollars to over 4 dollars per gallon. 

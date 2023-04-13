@@ -1,0 +1,558 @@
+---
+title: "module5"
+author: "Andrew Estes"
+date: '2023-02-09'
+output: pdf_document
+---
+# 1 
+Load the data set and perform any necessary cleaning. While the data set should be relatively "clean" already, you may want to think about which variables are numbers, which should be factors, which should be character, etc.
+
+# 2
+Decide on which variables you will consider for your model. There are likely more variables that you can easily use. Which do you believe might be useful? Write the code to select those variables, and in the text include a short explanation for why you chose the variables you did. (Note: you may decide later to only use some of these variables, but this step is about identifying the largest set of variable's you'll consider.)
+
+```{r}
+pacman::p_load(knitr,
+               tidymodels, 
+               tidyverse, 
+               ggplot2, 
+               leaps, 
+               car, 
+               caret, 
+               rpart, 
+               rpart.plot, 
+               randomForest, 
+               pROC,
+               #MASS,
+               #factoextra, 
+               #FactoMineR,
+               #vcd,
+               dplyr, 
+               hablar, 
+               cvms,
+               ranger,
+               readxl,
+               lubridate,
+               gridExtra,
+               cowplot,
+               patchwork,
+               naivebayes,
+               psych) 
+
+orig.df <- read.csv("compas-scores-two-years-w-marital-bw-cleaned.csv")     
+#sapply(orig.df, class)
+
+factorColumns <- c("sex", "age_cat", "race", "marital_status", "c_charge_degree", "score_text", "v_score_text")
+
+timeColumns <- c("dob", "c_jail_in", "c_jail_out", "c_offense_date", 
+                 "c_arrest_date", "screening_date", "r_offense_date", 
+                 "r_jail_in", "r_jail_out", "vr_offense_date")
+
+removeColumns <- c("in_custody", "out_custody", "r_case_number",
+                   "c_case_number", "type_of_assessment",
+                   "v_type_of_assessment", "vr_case_number",
+                   "is_recid", "id", "event", "r_days_from_arrest",
+                   "screening_date", "r_offense_date", "r_jail_in",
+                   "r_jail_out", "r_charge_desc", "r_charge_degree",
+                   "vr_charge_degree", "vr_charge_desc",
+                   "vr_offense_date", "dob", "c_jail_in", "c_jail_out", 
+                   "c_offense_date", "c_arrest_date", "screening_date", 
+                   "r_offense_date", "r_jail_in", "r_jail_out", 
+                   "vr_offense_date", "is_violent_recid")
+
+df <- orig.df
+df <- orig.df %>%
+  mutate_each_(funs(factor(.)), factorColumns) %>%
+  mutate_at(vars(timeColumns), funs(as.Date(., "%Y-%m-%d"))) %>%
+  mutate(two_year_recid = as.numeric(two_year_recid)) %>%
+  dplyr::select(-c(removeColumns))
+
+#transforming logical variables to integers
+#cols <- sapply(df, is.logical)
+
+#removing all date columns and character columns
+df <- df[, sapply(df, class) != "Date"]
+df <- df[, !sapply(df, is.character)]
+
+sapply(df, class)
+```
+The "in_custody" and "out_custody" variables because they were copies of the "c_jail_in" and "c_jail_out" variables.
+
+All of the case numbers from the dataset were removed as well as that isn't pertinent without corresponding judicial information. 
+And, relevant to this class, it helps with privacy concerns.
+
+The assessments were removed because there was no difference in the type of assessment utilized.  
+
+The charge description remained as characters because there might be some NLP analysis that could be useful.
+
+All the columns that were dates but classified as characters were re-characterized as dates. I think the dates could be interesting to analyze. Maybe there is a correlation between month and recidivism.  But I deleted them in the interest of timeliness.
+
+The factor classification was applied to the relevant columns, such as race, marital status, etc. I thought about changing the Decile information into a factor but decided to keep it as an integer as it is a numeric calculation.
+
+And finally, all logical columns became numeric for the purposes of running a logistic regression on the two_year_recid.
+
+After running the models, a bunch of columns had to be removed  due to high correlation with the two_year_recid.
+
+
+
+\newpage
+# 3
+Create tables or graphs to visualize the values of your variables. Ideally, data visualizations should start to give you an idea of which variables are important and how they might relate to the response variable and each other. At minimum, you should do the following.
+
+A) Create tables or graphs to understand the distributions of each individual variable. For example, are there the same number of African-American and Caucasian arrestees in the data set?
+
+B) Create graphs that look at how each explanatory variable is related to the response variable two_year_recid.
+
+C) Write a paragraph or two that points out any features of your tables or graphs that you believe are important. You don't need to describe every graph, but rather comment on aspects that might affect your analysis later.
+```{r}
+#PCA doesn't work due to non-numerical variables
+#FAMD allows for non-numerical variables but cannot handle NAs
+
+#prepping the data for further exploration. this breakdown isn't necessarily needed but is nice to look at if you only want to analyze a specific subset
+df_male <- df %>%
+  filter(sex == 'Male')
+
+df_female <- df %>%
+  filter(sex == 'Female')
+
+df_black <- df %>%
+  filter(race == 'African-American')
+
+df_white <- df %>%
+  filter(race == 'Caucasian')
+
+df_black_r <- df_black %>%
+  filter(two_year_recid==TRUE)
+
+df_white_r <- df_white %>%
+  filter(two_year_recid==TRUE)
+
+df_r <- df %>%
+    filter(two_year_recid==TRUE)
+
+################### PART A
+#Showing the counts of data for a quick overview
+
+counts <- matrix(c(
+  count(df_black), sum(df_black$two_year_recid==TRUE), sum(df_black$sex=='Male'), sum(df_black$sex=='Female'), sum(df_black$c_charge_degree=='F'), sum(df_black$c_charge_degree=='M'), sum(df_black$juv_fel_count), sum(df_black$juv_misd_count), sum(df_black$juv_other_count),
+
+      count(df_white), sum(df_white$two_year_recid==TRUE), sum(df_white$sex=='Male'), sum(df_white$sex=='Female'), sum(df_white$c_charge_degree=='F'), sum(df_white$c_charge_degree=='M'), sum(df_white$juv_fel_count), sum(df_white$juv_misd_count), sum(df_white$juv_other_count),
+  
+    count(df_black_r), NA, sum(df_black_r$sex=='Male'), sum(df_black_r$sex=='Female'), sum(df_black_r$c_charge_degree=='F'), sum(df_black_r$c_charge_degree=='M'), sum(df_black_r$juv_fel_count), sum(df_black_r$juv_misd_count), sum(df_black_r$juv_other_count),
+
+      count(df_white_r), NA, sum(df_white_r$sex=='Male'), sum(df_white_r$sex=='Female'), sum(df_white_r$c_charge_degree=='F'), sum(df_white_r$c_charge_degree=='M'), sum(df_white_r$juv_fel_count), sum(df_white_r$juv_misd_count), sum(df_white_r$juv_other_count)),
+
+    ncol=4)
+
+colnames(counts) <- c("Black", "White", "Black_Recided", "White_Recided")
+rownames(counts) <- c("Total", "Recided", "Male", "Female", "Felony", "Misdemeanor", "Juvenile Felony", "Juvenile Misdemeanor", "Juvenile Other")
+
+kable(counts)
+
+################### PART B
+#Showing the age breakdown by race and age
+histogram_black_scaled <- ggplot(df_black, aes(x = age, fill = two_year_recid)) + 
+  geom_histogram(bins=10) +
+  ylim(0, 1150) +
+  xlim(10,80) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position = "none") +
+  ggtitle("Black Scaled")
+
+histogram_white_scaled <- ggplot(df_white, aes(x = age, fill = two_year_recid)) + 
+  geom_histogram(bins=10) +
+  ylim(0, 1150) +
+  xlim(10,80) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("White Scaled")
+
+histogram_black <- ggplot(df_black, aes(x = age, fill = two_year_recid)) + 
+  geom_histogram(bins=10) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position = "none") +
+  ggtitle("Black")
+
+histogram_white <- ggplot(df_white, aes(x = age, fill = two_year_recid)) + 
+  geom_histogram(bins=10) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("White")
+
+grid.arrange(histogram_black, histogram_white, ncol=2)
+
+#another way to look at the age/race breakdown
+violin <- ggplot(df_r, aes(x = age, y=race, fill=race)) +
+  geom_violin(trim=FALSE) 
+violin + geom_boxplot(width=0.1, fill = "white") 
+
+#plotting different variables against the two_year_recid 
+marital <- 
+  ggplot(df, aes(x=factor(marital_status), fill=factor(two_year_recid))) +
+  geom_histogram(stat="count") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position = "none") 
+
+marital_proportion <- 
+  ggplot(df, aes(x=factor(marital_status), fill=factor(two_year_recid))) +
+  geom_histogram(stat = "count", position= "fill") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+
+decile <- 
+  ggplot(df, aes(x=factor(decile_score), fill=factor(two_year_recid))) +
+  geom_bar(stat="count") +
+  theme(legend.position = "none") 
+
+decile_proportion <- 
+  ggplot(df, aes(x=factor(decile_score), fill=factor(two_year_recid))) +
+  geom_histogram(stat = "count", position= "fill") 
+
+decile_text <- 
+  ggplot(df, aes(x=factor(score_text), fill=factor(two_year_recid))) +
+  geom_histogram(stat = "count") +
+  theme(legend.position = "none") 
+
+decile_text_proportion <- 
+  ggplot(df, aes(x=factor(score_text), fill=factor(two_year_recid))) +
+  geom_histogram(stat = "count", position= "fill") 
+
+marital + marital_proportion
+decile + decile_proportion
+decile_text + decile_text_proportion
+
+
+#showing overall impact of age, time out of jail, and likelihood of recividism
+model_end <- ggplot(df, aes(x=end, y=two_year_recid)) +
+  geom_point(alpha=.5) +
+  stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+
+model_priors <- ggplot(df, aes(x=priors_count, y=two_year_recid)) +
+  geom_point(alpha=.5) +
+  stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+
+model_age <- ggplot(df, aes(x=age, y=two_year_recid)) +
+  geom_point(alpha=.5) +
+  stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+
+model_decile <- ggplot(df, aes(x=decile_score, y=two_year_recid)) +
+  geom_point(alpha=.5) +
+  stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+
+model_end + model_priors
+model_age + model_decile
+
+#showing the relation between age and staying out of jail
+model_end_age <- ggplot(df, aes(x=age, y=end)) +
+  geom_point(alpha=.5) +
+  stat_smooth(method="loess", se=TRUE)
+model_end_age
+
+```
+My final graph shows the relationship between age and staying out of jail. As expected there is a positive upwards relation, the older someone is, the less likely they get put back in jail.  This linear model was created due to the output from prior logit models (age, time out of jail, priors, decile score).
+
+I also ran the marital status and made it proportional. My expectation that married individuals would have the lowest rate of recidivism, but they were 3rd lowest behind widows and divorcees. The divorcee surprised me. 
+
+The other interesting graphical output was the age breakdown by race. The black concentration is closer to 25, while the white concentration is closer to 35. Further exploration showing the recidivism based upon the "age" and "end" variables should incorporate race since the distribution is quite different. 
+
+\newpage
+# 4
+Create a training and test set from your original data. (You can decide to use cross-validation for model creation and assessment if you like, but it's not required for this assignment.)
+
+# 5
+Using your training set, create at least three predictive models that attempt to predict two_year_recid using some or all of your chosen predictor variables.
+
+A) For each model, include a paragraph or so that explains why you chose that particular model, or those particular variables, and any other decisions you made that might be relevant. Ideally, your explanation might also describe how you hope the next model will improve on the previous model. You might consider overall choice of model (logistic regression, SVM, random forest, etc.) as well as choices made to balance classes or categories.
+
+B) Write the code to make the model and to assess its overall accuracy and its sensitivity and specificity. You could write your own code, pull the numbers out of the confusionMatrix command output, or find other packages if need be. (Note: It should be relatively easy to match the accuracy of the Compas algorithm. We might take a minute to ponder what that means. It may be harder to get unbiased results for the two racial groups.)
+```{r}
+#4
+#finding NA values
+colSums(is.na(df)) %>% as.data.frame()
+df <- subset(df, select = -c(end)) #removing due to high correlation
+
+#creating training/test datasets
+set.seed(1234)
+split <- sample(1:nrow(df), 0.75*floor(nrow(df)))
+split.train <- df[split, ]
+split.test <- df[-split, ]
+
+split.train.numeric <- split.train %>%
+  mutate(two_year_recid = as.numeric(two_year_recid))
+split.test.numeric <- split.train %>%
+  mutate(two_year_recid = as.numeric(two_year_recid))
+  
+table(split.train$race) %>%
+  kable()
+
+fit.stats <- function(fit, test){
+  test$res <- test$two_year_recid - predict(fit, newdata = test)
+  rbind(test %>% group_by(race) %>%
+          summarize(Bias = -mean(res),
+                    RMSE = sqrt(mean(res^2))),
+        test %>% 
+          summarize(race = 'All',
+                    Bias = -mean(res),
+                    RMSE = sqrt(mean(res^2))))
+}
+
+# Log Loss as defined on the kaggle forum
+LogLoss<-function(act, pred){
+ eps = 1e-15;
+ nr = length(pred)
+ pred = matrix(sapply( pred, function(x) max(eps,x)), nrow = nr)
+ pred = matrix(sapply( pred, function(x) min(1-eps,x)), nrow = nr)
+ ll = sum(act*log(pred) + (1-act)*log(1-pred))
+ ll = ll * -1/(length(act))
+ return(ll);
+ }
+```
+
+
+```{r}
+#5 - model 1 - steppwise regression
+#Entire model
+full.model <- lm(as.numeric(two_year_recid) ~., data = split.train)
+summary(full.model)
+
+stepAIC <- MASS::stepAIC
+step.model <- stepAIC(full.model, direction = "both", trace = FALSE)
+summary(step.model)
+
+#creating confusion matrix
+split.test$prob <- predict(step.model, split.test, type = "response")
+split.test$recid <- ifelse(split.test$prob>=0.5, 1, 0) 
+
+
+library(Hmisc)
+describe(split.test$race)
+
+
+#list of races, 1,2,3
+#dataframe
+
+tab.step <- table(group=split.test$race, split.test$recid, split.test$two_year_recid)
+tab.step2 <- table(split.test$recid, split.test$two_year_recid)
+
+#plotting roc 
+plot(roc(split.test$two_year_recid, split.test$recid), col="red")
+
+auc(roc(split.test$two_year_recid, split.test$recid), col="red")
+
+#test dataset, create new column, 
+
+#graphing output
+p <- split.test %>%
+  arrange(prob) %>%
+  mutate(rank = rank(prob), 
+         Event = ifelse(prob >= 0.5, 'Jail', 'Free')) %>%
+  ggplot(aes(rank, prob)) +
+  geom_point(aes(color = Event)) + 
+  geom_smooth(method = 'glm',
+              method.args = list(family = 'binomial')) 
+
+p
+
+#using fit.stats function
+#fit.stats(step.model, split.test)
+
+#specificity and other stats
+cm.step <- tab.step
+
+accuracy.step <- sum(cm.step[1], cm.step[4]) / sum(cm.step[1:4])
+precision.step <- cm.step[4] / sum(cm.step[4], cm.step[2])
+sensitivity.step <- cm.step[4] / sum(cm.step[4], cm.step[3])
+fscore.step <- (2 * (sensitivity.step * precision.step))/(sensitivity.step + precision.step)
+specificity.step <- cm.step[1] / sum(cm.step[1], cm.step[2])
+```
+
+I ran the stepwise model first to determine what variables were important. 
+
+\newpage
+
+
+```{r}
+#5 - model 2 - naive bayes (https://www.r-bloggers.com/2021/04/naive-bayes-classification-in-r/)
+bayes.model <- naive_bayes(as.factor(two_year_recid) ~ ., data = split.train, usekernel = T)
+
+
+full.model <- lm(as.numeric(two_year_recid) ~., data = split.train)
+
+#plot(bayes_model)
+
+p <- predict(bayes.model, split.train, type="prob")
+
+#confusion matrix train data
+p1 <- predict(bayes.model, split.train)
+tab1.bayes <- table(p1, split.train$two_year_recid)
+
+#confusion matrix test data
+p2 <- predict(bayes.model, split.test)
+tab.bayes <- table(p2, split.test$two_year_recid)
+tab.bayes
+1 - sum(diag(tab.bayes)) / sum(tab.bayes)
+
+
+#just need to figure out how to group by race 
+#fit.stats(bayes_model, split.test)
+
+#specificity and other stats
+cm.bayes <- tab.bayes
+
+
+accuracy.bayes <- sum(cm.bayes[1], cm.bayes[4]) / sum(cm.bayes[1:4])
+precision.bayes <- cm.bayes[4] / sum(cm.bayes[4], cm.bayes[2])
+sensitivity.bayes <- cm.bayes[4] / sum(cm.bayes[4], cm.bayes[3])
+fscore.bayes <- (2 * (sensitivity.bayes * precision.bayes))/(sensitivity.bayes + precision.bayes)
+specificity.bayes <- cm.bayes[1] / sum(cm.bayes)
+specificity.bayes
+```
+
+\newpage
+
+```{r}
+#5 - model 3 - linear discrimant analysis https://www.r-bloggers.com/2021/05/linear-discriminant-analysis-in-r/
+
+lda <- MASS::lda
+#install.packages("klaR")
+library(klaR)
+
+lda.model <- lda(two_year_recid ~., split.train)
+lda.predict <- predict(lda.model, split.train)
+#partimat(two_year_recid ~., data = split.train, method = 'lda')
+
+lda.predict.class <- predict(lda.model, split.test.numeric)$class
+tab.lda <- table(lda.predict.class, split.test.numeric$two_year_recid)
+tab.lda
+
+#fit.stats(lda.predict, split.test)
+
+#specificity and other stats
+cm.lda <- tab.lda
+
+accuracy.lda <- sum(cm.lda[1], cm.lda[4]) / sum(cm.lda[1:4])
+precision.lda <- cm.lda[4] / sum(cm.lda[4], cm.lda[2])
+sensitivity.lda <- cm.lda[4] / sum(cm.lda[4], cm.lda[3])
+fscore.lda <- (2 * (sensitivity.lda * precision.lda))/(sensitivity.lda + precision.lda)
+specificity.lda <- cm.lda[1] / sum(cm.lda)
+specificity.lda
+```
+
+```{r}
+#running logistic regression
+logit <- glm(two_year_recid ~ ., data = split.train, family = "binomial")
+
+```
+
+```{r}
+#prepping for table output
+race.list <- list("African-American" = "African-American", 
+                  "Caucasian" = "Caucasian",
+                  "All" = c("African-American", "Caucasian")) 
+
+detach(package:Hmisc)
+
+display.stats <- function(test){
+map_dfr(race.list, ~ test %>% filter(race %in% .x) %>% 
+          summarize(Accuracy = mean(two_year_recid==predict), 
+                    Sensitivity = sum(two_year_recid=="TRUE" & predict=="TRUE")/sum(two_year_recid=="TRUE"), 
+                    Specificity = sum(two_year_recid=="FALSE" & predict=="FALSE")/sum(two_year_recid=="FALSE")), 
+        .id="Race") %>% 
+  kable()
+}
+
+
+step.results <- split.test %>% 
+  mutate(predict = factor(predict(step.model, newdata=split.test, type="response") > .50)) %>% 
+  display.stats()
+
+bayes.results <- split.test %>% 
+  mutate(predict = (predict(bayes.model, newdata=split.test, type="prob") > .50)) %>% 
+  display.stats()
+
+logit.results <- split.test %>% 
+  mutate(predict = (predict(logit, newdata=split.test, type="response") > .50)) %>% 
+  display.stats()
+
+```
+
+\newpage
+# 6
+Finally, summarize the results of your three models in an easy-to-read table, and comment on what you found as a result of this process.
+```{r}
+step.results
+bayes.results
+#lda.results
+logit.results
+```
+A higher specific test means that there are few false positive results. In this model, a positive result is a prediction of recidivism.
+Our goal is to have a highly accurate model that doesn't discriminate. It is the opinion of author that it would be better to minimize the false positive rate at the expense of reducing accuracy or increasing false negative rates (falsely predicting the person will not go back to jail).
+
+The damage done by predicting someone will go back to jail who does not go back to jail exceeds the damage done by predicting someone will remain out of jail, when in fact they do return. 
+
+I selected four models to evaluate the data. The first model was stepwise regression.
+The stepwise model had an 82% specificity overall, but only 74% specificity for blacks compared to the 91% specificity for whites. A 17 point difference in accuracy based on race is not ideal
+
+The second model used was a naive bayes model. For some reason the display.stats function indicates a perfect specificity rate. However if calculated independently of the function, the overall specificity was 45%. This should be looked into further.
+
+The third model was a linear-discriminant model. LDA is similar to naive Bayes, except it assumes the distribution is Guassian and similar in all classes. I could not find a way to output any data with the lda using the display.stats function. My multiple attempts are at the end of this page. Similar to the naive bayes model, the specificity was a paltry 44%. 
+
+The fourth and final model calculated was the simple multi-variate logistic regression. Like the stepwise model, it's specificity towards blacks was 74%. It performed worse than the stepwise model for whites, reducing the specificity from 91% to 89%. The overall accuracy of the logistic regression was slightly better than the stepwise model. 
+
+A fifth model considered was the KNN model. Since we are only classifying two groups, KNN would work as an unsupervised learning algorithm since it has the restriction of n groups <= 5. Prior to the office hours meeting, I was unable to get it to work. 
+
+In the interest of time, there are many flaws with the analysis. Removal of race as a predictor variable should be considered.
+Cross validation should be implemented. Better pre-processing of the data should occur. Further exploration of the models and thoughts on how to build upon them should also be evaluated. One such method could be gradient boosting the logistic regression.
+
+\newpage
+
+```{r, eval=FALSE}
+#trying to get display.stats to work with the lda model
+#issue: x unimplemented type 'list' in 'orderVector1'
+#issue: no applicable method for 'mutate' applied to an object of class "c('double', 'numeric')"
+
+split.test2 <- as.data.frame(lapply(split.test, unlist))
+
+lda.results <- split.test2 %>%
+  ungroup() %>%
+  mutate(predict = factor(predict(lda.model, newdata=split.test2))) %>%
+  display.stats()
+
+lda.results0 <- split.test %>% 
+  mutate(predict = (predict(lda.model, newdata=split.test))) %>% 
+  display.stats()
+
+lda.results1 <- split.test2 %>% 
+  unlist() %>%
+  mutate(predict = (predict(lda.model, newdata=split.test))) %>% 
+  display.stats()
+
+lda.results2 <- split.test %>% 
+  ungroup() %>%
+  mutate(predict = (predict(lda.model, newdata=split.test))) %>% 
+  display.stats()
+
+lda.results3 <- split.test %>% 
+  mutate(predict = (predict(lda.model, newdata=split.test))) %>% 
+  ungroup() %>%
+  display.stats()
+
+lda.results4 <- split.test %>% 
+  mutate(predict = (predict(lda.model, newdata=split.test, type="prob") > .50)) %>% 
+  ungroup() %>%
+  display.stats()
+
+lda.results5 <- split.test %>% 
+  mutate(predict = (predict(lda.model, newdata=split.test, type="response") > .50)) %>% 
+  ungroup() %>%
+  display.stats()
+
+lda.results6 <- split.test %>% 
+  ungroup() %>%
+  mutate(predict = (predict(lda.model, newdata=split.test.numeric, type="response") > .50)) %>% 
+  display.stats()
+
+lda.results7 <- split.test %>% 
+  unlist() %>%
+  mutate(predict = (predict(lda.model, newdata=split.test, type="prob") > .50)) %>% 
+  display.stats()
+
+lda.results8 <- split.test %>% 
+  unlist() %>%
+  mutate(predict = factor(predict(lda.model, newdata=split.test, type="prob") > .50)) %>% 
+  display.stats()
+```
+

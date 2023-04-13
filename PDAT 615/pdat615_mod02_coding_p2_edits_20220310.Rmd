@@ -1,0 +1,241 @@
+---
+title: Module 2 Coding Lab
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Set-up
+
+First, we'll load some of the usual packages.
+
+```{r Packages}
+library(tidyverse)
+```
+
+# Basic Perceptron Algorithm
+
+First we'll set up our small data frame, then a larger data frame, both
+linearly separable.
+
+```{r dataSetup}
+set.seed(382)
+df <- df <- data.frame(
+  x1 = c(1, 2, -1, -1, 0),
+  x2 = c(1, -1, 1, 0, -1),
+  y = c(1, 1, 0, 0, 0)
+)
+
+# We take a random w here, define a mass of points, then label them according
+# to their dot product with w in order to insure there is a linear separation.
+w <- runif(2)
+df2 <- data.frame(
+  x1 = runif(100, min=-1, max=1),
+  x2 = runif(100, min=-1, max=1),
+  y = numeric(100)
+)
+for(i in 1:nrow(df2)){
+  # We could be clever and not use a loop, but this works.
+  df2$y[i] <- if_else(w %*% as.numeric(df2[i, 1:2]) >= 0, 1, 0)
+}
+```
+
+The first perceptron function implements the algorithm we saw in lecture. I've
+added an option to either plot a graph or just return values.
+
+```{r perceptronFunction}
+perceptron <- function(X, y, plot.line=FALSE){
+  # Add the extra column of 1's to allow a linear separation not through origin.
+  X <- cbind(X, rep(1, nrow(X)))
+  # Random starting value for the direction vector w.
+  w <- runif(ncol(X))
+  # w.mod is the flag for convergence. If we got through a whole cycle of all  
+  # the data points, and w was never modified, then we know we were correct on 
+  # all predictions. Start as TRUE so we get at least once through the loop.
+  w.mod <- TRUE
+  while(w.mod){
+    w.mod <- FALSE
+    for(i in 1:nrow(X)){
+      y.hat <- as.numeric(w %*% X[i, ] >= 0)
+      w.mod <- w.mod || (y[i] != y.hat)
+      w <- w + (y[i] - y.hat) * X[i, ]
+    }
+  }
+  if(plot.line){
+    g1 <- ggplot(data.frame(x1=X[, 1], x2=X[, 2], y=as.factor(y))) +
+      geom_point(aes(x=x1, y=x2, color=y)) +
+      geom_abline(slope=-w[1]/w[2], intercept=-w[3]/w[2]) +
+      ggtitle(paste0("Perceptron Model: w0 = ", round(w[3], 3),
+                     ", w1 = ", round(w[1], 3), ", w2 = ", round(w[2], 3))) +
+      theme_bw()
+    return(g1)
+  } else {
+    return(w)
+  }
+}
+```
+
+Let's try it out on our two data sets!
+
+```{r}
+X <- as.matrix(df[, 1:2])
+y <- df$y
+perceptron(X, y, plot.line=TRUE)
+```
+
+```{r}
+X <- as.matrix(df2[, 1:2])
+y <- df2$y
+perceptron(X, y, plot.line=TRUE)
+```
+
+# A "Learning Rate" Parameter
+
+Often it's good to control how fast a machine learning algorithm will change
+as a result of correcting for incorrect predictions. For the perceptron, this
+learning rate, rho, multiplies the correction term in the model:
+
+$$\vec{w} \leftarrow \vec{w} + \rho (y - f(\vec{x})) \vec{x}$$
+
+When rho < 1, corrections to vector w are less drastic each time through
+the loop. Let's implement this, and then see what effect it has on how long
+it takes the algorithm to converge.
+
+
+```{r perceptronFunction2}
+perceptron2 <- function(X, y, seed=NA, rho=1, plot.line=FALSE){
+  # seed, if set, sets the random seed for repeatability.
+  # rho is the learning rate, which defaults to 1.
+  if(!is.na(seed)) set.seed(seed)
+  X <- cbind(X, rep(1, nrow(X)))
+  w <- runif(ncol(X))
+  # w.mod is the flag for convergence. If we got through a whole cycle of all  
+  # the data points, and w was never modified, then we know we were correct on 
+  # all predictions. Start as TRUE so we get at least once through the while.
+  w.mod <- TRUE
+  # iter counts the number of times through the whole data set before the
+  # algorithm converges.
+  iter <- 0
+  while(w.mod){
+    w.mod <- FALSE
+    for(i in 1:nrow(X)){
+      y.hat <- as.numeric(w %*% X[i, ] >= 0)
+      w.mod <- w.mod || (y[i] != y.hat)
+      w <- w + rho * (y[i] - y.hat) * X[i, ]
+    }
+    iter <- iter + 1
+  }
+  if(plot.line){
+    g1 <- ggplot(data.frame(x1=X[, 1], x2=X[, 2], y=as.factor(y))) +
+      geom_point(aes(x=x1, y=x2, color=y)) +
+      geom_abline(slope=-w[1]/w[2], intercept=-w[3]/w[2]) +
+      ggtitle(paste0("Perceptron Model: w0 = ", round(w[3], 3),
+                     ", w1 = ", round(w[1], 3), ", w2 = ", round(w[2], 3),
+                     ", L.R. = ", rho, ", iter = ", iter, ".")) +
+      theme_bw()
+    return(g1)
+  } else {
+    return(list(w=w, iter=iter))
+  }
+}
+```
+
+For the small data set, it takes longer to converge with smaller `rho`. This
+seems true for most seeds.
+
+```{r}
+X <- as.matrix(df[, 1:2])
+y <- df$y
+perceptron2(X, y, seed=36, rho=0.1, plot.line=TRUE)
+perceptron2(X, y, seed=36, rho=1, plot.line=TRUE)
+```
+
+For the larger data set, convergence can be much faster for smaller `rho`.
+
+```{r}
+X <- as.matrix(df2[, 1:2])
+y <- df2$y
+perceptron2(X, y, seed=36, rho=0.1, plot.line=TRUE)
+perceptron2(X, y, seed=36, rho=1, plot.line=TRUE)
+```
+
+# Optimizing
+
+In this section, we'll try to implement our "Perceptron, Mark II" using the 
+loss function defined in lecture, as opposed to the original algorithm.
+
+First, let's define a data set with overlapping data points.
+
+```{r}
+set.seed(875)
+w <- runif(2)
+df3 <- data.frame(
+  x1 = runif(100, min=-1, max=1),
+  x2 = runif(100, min=-1, max=1),
+  y = numeric(100)
+)
+for(i in 1:nrow(df3)){
+  # We could be clever and not use a loop, but this works.
+  df3$y[i] <- if_else(w %*% as.numeric(df3[i, 1:2]) + rnorm(1, 0, .1) >= 0, 1, 0)
+}
+ggplot(df3) + geom_point(aes(x=x1, y=x2, color=as.factor(y)))
+```
+
+Now, we'll define our loss function. Note that `fit.loss` is the simple loss
+function that allows an arbitrary direction vector `w`. The `constrained.loss`
+function is a wrapper function that enforces the constraint that the length
+of `w` is always equal to 1, which should ensure a unique solution for 
+overlapping data points and keep us away from the degenerate zero direction
+vector.
+
+```{r}
+fit.loss <- function(w, X, y){
+  w <- w / as.numeric(sqrt(w %*% w))
+  s <- 0
+  for(i in 1:nrow(X)){
+    # Another place where loop sums over all data points, just for code clarity.
+    y.hat <- as.numeric(w %*% X[i, ] >= 0)
+    s <- s - as.numeric((y[i] - y.hat) * (w %*% X[i, ]))
+  }
+  return(s)
+}
+constrained.loss <- function(w, X, y){
+  # Here we take a two-element w vector and compute the third element so that
+  # the total length of w3 is equal to 1. In general, when you have a constraint,
+  # at least one of your parameters is not free, and only free parameters should
+  # be listed in the function you're trying to optimize.
+  w.length <- as.numeric(sqrt(w %*% w))
+  if(w.length > 1){
+    return(Inf)
+  } else {
+    w3 <- c(w, sqrt(1 - w.length^2))
+    return(fit.loss(w3, X, y))
+  }
+}
+```
+
+Finally, we'll try our loss function. We start with a two-element initial w,
+find its optimal values, then add in the third element to make the total length
+equal to 1. Remember that the third element of the `w` vector corresponds to
+setting the intercept of the dividing line, but I call it w0 in the output
+graph to match what we did in lecture.
+
+```{r}
+X <- as.matrix(df3[, 1:2])
+y <- df3$y
+X <- cbind(X, rep(1, nrow(X)))
+w.init <- c(.932, .363)
+w.opt <- optim(w.init, constrained.loss, X=X, y=y, method="Nelder-Mead")
+#w.opt <- optim(w.init, constrained.loss, X=X, y=y, method="SANN")
+w <- w.opt$par
+w <- c(w, sqrt(1 - as.numeric(w %*% w)))
+g1 <- ggplot(data.frame(x1=X[, 1], x2=X[, 2], y=as.factor(y))) +
+  geom_point(aes(x=x1, y=x2, color=y)) +
+  geom_abline(slope=-w[1]/w[2], intercept=-w[3]/w[2]) +
+  ggtitle(paste0("Perceptron Model: w0 = ", round(w[3], 3),
+                 ", w1 = ", round(w[1], 3), ", w2 = ", round(w[2], 3))) +
+  theme_bw()
+g1
+print(paste("Initial Loss:", constrained.loss(w.init, X, y)))
+print(paste("Final Loss:", w.opt$value))
+```

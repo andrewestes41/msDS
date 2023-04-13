@@ -1,0 +1,131 @@
+---
+title: "module3_part2"
+author: "Andrew Estes"
+date: "4/2/2022"
+output: pdf_document
+---
+
+# 1
+Use the same code that I used in the lab to clean the data frame and get it ready to use. You'll be using the mycars data frame that the lab code defines.
+```{r}
+library(tidyverse)
+library(caret)
+```
+
+```{r}
+data("cars")
+brand.names <- c("Buick", "Cadillac", "Chevy", "Pontiac", "Saab", "Saturn")
+car.types <- c("coupe", "hatchback", "sedan", "wagon")
+
+mycars <- cars %>%
+  mutate(Brand = factor(case_when(
+    Buick == 1 ~ "Buick",
+    Cadillac == 1 ~ "Cadillac",
+    Chevy == 1 ~ "Chevy",
+    Pontiac == 1 ~ "Pontiac",
+    Saab == 1 ~ "Saab",
+    Saturn == 1 ~ "Saturn"))) %>%
+  mutate(Type = factor(case_when(
+    coupe == 1 ~ "coupe",
+    hatchback == 1 ~ "hatchback",
+    sedan == 1 ~ "sedan",
+    wagon == 1 ~ "wagon",
+    TRUE ~ "NA"))) %>%
+  select(!contains(brand.names) & !contains(car.types))
+
+sat <- mycars %>% 
+  filter(Brand=="Saturn") %>% 
+  mutate(Type = fct_drop(Type))
+
+sat <- subset(sat, select = -c(Brand))
+```
+
+\newpage
+# 2 
+Use train and method="lm" to compute a multiple linear regression model and get its cross-validated RMSE. Include the option savePredictions=TRUE in your trainControl open set.
+
+A ) Make sure to state your RMSE result in the text. 
+This is the baseline RMSE that the other models should be able to beat.
+
+B) Also, make a plot of residuals vs. fit. 
+This plot puts the difference between actual and predicted price on the y axis, 
+plotted against actual price on the x axis. 
+
+For a well-fitting model, this cloud of residuals should be symmetric around 
+the 0 line with no non-linear zigs or zags.  Comment in the text on how well 
+your model appears to fit the data, based on this graph. 
+
+You can use code that might look like this (or do something fancier):
+  plot(x=fit$pred$obs, y=fit$pred$obs-fit$pred$pred)
+```{r}
+fit.lm.sat <-
+  train(Price ~ ., 
+        data=sat,
+        method="lm",
+        trControl=trainControl(method="repeatedcv", 
+                               number=10, 
+                               repeats=5, 
+                               maximize=RMSE
+                               savePredictions=TRUE))
+
+?train
+
+#Part A....Stating the RMSE
+fit.lm.sat$results$RMSE
+
+#Part B....Graphing
+#plot(fit.lm.sat)
+```
+
+\newpage
+# 3
+Use train and method="svmRadialSigma" to tune a support vector machine. 
+Include the option savePredictions=TRUE in your trainControl open set.
+As in Part 1 of the homework, give it a few tries to try to find optimal tuning
+parameters. Then do the following:
+
+A) Plot RMSE vs. values of your tuning parameters and state in the text the 
+values of the tuning parameters that optimized RMSE.
+
+B) State the best RMSE you found in the text, and comment on whether it was 
+higher or lower than the regular linear regression.
+
+C) Make a plot of residuals vs. fit, as described above, for this model. 
+Comment on how well the support vector machine seems to fit the data. 
+Does it do better than the plan old linear regression?
+
+```{r}
+fit.svm.sat <-
+  train(Price ~ ., 
+        data=sat,
+        method="svmRadialSigma",
+        trControl=trainControl(method="repeatedcv", 
+                               number=5, 
+                               repeats=3,
+                               savePredictions=TRUE)
+  )
+
+plot(fit.svm.sat)
+```
+
+\newpage
+# 4
+Do the same thing with a single-layer neural network using either the nnet or 
+neuralnet method (caution: neuralnet runs slow, so start small). 
+
+Remember the nnet is single-layer by design, and for neuralnet, you'll have to 
+use tuning parameters to try different numbers of notes in layer1 and set the 
+layer2 and layer3 parameters to zero. 
+
+Or, if you're feeling brave, look at one of the other neural network methods 
+available through train. Neither nnet nor neuralnet seem to work very well with
+this data (perhaps because of all the 0/1 variables?). Comment on what you see. 
+Or, maybe you'll find a way to make a neural net work!
+```{r}
+
+```
+
+\newpage
+# 5
+Finally, add a paragraph that sums it all up. Which method worked best? 
+Which fit the data best in this example?

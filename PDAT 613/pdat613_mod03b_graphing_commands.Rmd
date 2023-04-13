@@ -1,0 +1,201 @@
+---
+title: "PDAT613G: Data Mining"
+subtitle: "Module 3B Graphing Commands"
+author: ""
+date: "2020-07-02"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+#library(knitr)
+library(grid)
+library(gridExtra)
+library(RColorBrewer)
+options(digits=5)
+```
+
+```{r}
+mo.raw <- read.csv("MO_ACT_06-14.csv")
+mo <- mo.raw %>% filter(Pub.Priv == "Public", Year==2014) %>%
+  mutate(X = fct_reorder(X, Ave.Act)) %>%
+  select(School=X, ACT.NA=Num.NA, ACT.1.16=Num.1.16, ACT.17.18=Num.17.18,
+    ACT.19.23=Num.19.23, ACT.24.27=Num.24.27, ACT.28.32=Num.28.32,
+    ACT.33.36=Num.33.36)
+mo.mean <- mo.raw %>%
+  filter(Ave.Act <= 36 & Ave.Act > 0) %>%
+  group_by(Year) %>%
+  summarize(Ave.Act = mean(Ave.Act, na.rm=TRUE), School="All")
+mo.time <- mo.raw %>% filter(X %in% c("TRUMAN", "UMC")) %>%
+  select(School=X, Year, Ave.Act)
+mo.time <- full_join(mo.time, mo.mean) %>%
+  mutate(School = factor(School, levels=c("TRUMAN", "UMC", "All")))
+mo.time2 <- mo.raw %>% select(School=X, Year, Pub.Priv, Ave.Act) %>%
+  filter(Ave.Act <= 36 & Ave.Act > 0)
+```
+
+```{r}
+mo %>% select(School, ACT.NA, ACT.1.16, ACT.17.18, ACT.19.23)
+```
+
+```{r}
+mo %>% gather(key=Range, value=Number, -School) %>%
+  mutate(Range = factor(Range,
+    levels=c("ACT.33.36", "ACT.28.32", "ACT.24.27", "ACT.19.23", "ACT.17.18",
+      "ACT.1.16", "ACT.NA"),
+    labels=c("ACT 33-36", "ACT 28-32", "ACT 24-27", "ACT 19-23", "ACT 17-18",
+      "ACT 1-16", "ACT NA")
+    )) %>%
+  ggplot() +
+    geom_bar(aes(x=School, y=Number, fill=Range), position="fill",
+      stat="identity") +
+    theme(axis.text.x=element_text(angle=45, hjust=1)) +
+#    scale_fill_viridis_d(direction=-1) +
+    ylab("Percent")
+```
+
+```{r}
+spread(mo.time, key=School, value=Ave.Act)
+```
+
+```{r}
+mo.time %>%
+  ggplot() +
+  geom_line(aes(x=Year, y=Ave.Act, color=School)) +
+  scale_color_manual(values=c("mediumpurple", "darkgoldenrod", "black")) +
+  ylab("Mean ACT")
+
+```
+
+
+```{r}
+g1 <- mo.time %>% filter(School=="TRUMAN") %>% mutate(Year=as.factor(Year)) %>%
+  ggplot() +
+  geom_bar(aes(x=Year, y=Ave.Act), stat="identity", color="mediumpurple") +
+  ylab("Mean ACT")
+g2 <- mo.time %>% filter(School=="TRUMAN") %>%
+  ggplot() +
+  geom_point(aes(x=Year, y=Ave.Act), color="mediumpurple") +
+  ylab("Mean ACT")
+g3 <- mo.time %>% filter(School=="TRUMAN") %>%
+  ggplot() +
+  geom_line(aes(x=Year, y=Ave.Act), color="mediumpurple") +
+  geom_point(aes(x=Year, y=Ave.Act), color="mediumpurple") +
+  ylab("Mean ACT")
+g4 <- mo.time %>% filter(School=="TRUMAN") %>%
+  ggplot(aes(x=Year, y=Ave.Act)) +
+  geom_line(color="mediumpurple") +
+  geom_point(color="mediumpurple") +
+  geom_smooth(method="lm", se=FALSE) +
+  ylab("Mean ACT")
+g5 <- mo.time %>% filter(School=="TRUMAN") %>%
+  ggplot() +
+  geom_line(aes(x=Year, y=Ave.Act), color="mediumpurple") +
+  geom_point(aes(x=Year, y=Ave.Act), color="mediumpurple") +
+  ylab("Mean ACT") +
+  ylim(0, NA)
+g6 <- mo.time %>%
+  ggplot(aes(x=Year, y=Ave.Act)) +
+  geom_line(aes(color=School)) +
+  geom_point(aes(color=School)) +
+  scale_color_manual(values=c("TRUMAN"="mediumpurple", "UMC"="darkgoldenrod",
+                       "All"="black")) +
+  ylab("Mean ACT")
+g7 <- mo.time2 %>%
+  ggplot(aes(x=Year, y=Ave.Act)) +
+  geom_line(aes(color=School)) +
+  geom_point(aes(color=School)) +
+  ylab("Mean ACT") +
+  theme(legend.position="none")
+g8 <- mo.time2 %>%
+  mutate(Pub.Priv = factor(Pub.Priv, levels=c("Public", "Private"))) %>%
+  ggplot(aes(x=Year, y=Ave.Act)) +
+  geom_line(data=mo.time%>%filter(School=="TRUMAN"), color="mediumpurple", size=1.5) +
+  geom_point(aes(color=Pub.Priv, x=Year+(-0.1+0.2*(Pub.Priv=="Private")))) +
+  scale_color_manual(values=c("blue", "orangered")) +
+  ylab("Mean ACT") +
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  scale_x_continuous(breaks=2006:2014)
+g9 <- mo.time2 %>%
+  mutate(Pub.Priv = factor(Pub.Priv, levels=c("Public", "Private"))) %>%
+  ggplot(aes(x=as.factor(Year), y=Ave.Act)) +
+  geom_line(data=mo.time2%>%filter(School %in% c("TRUMAN")), aes(color=School), group=1, size=1.5) +
+  geom_boxplot(aes(fill=Pub.Priv)) +
+  ylab("Mean ACT") + xlab("Year") +
+  labs(fill="Public/Private") +
+  scale_fill_manual(values=c("lightblue", "orange1")) +
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  scale_color_manual(values=c("mediumpurple"))
+g10 <- mo.raw %>% filter(Pub.Priv == "Public") %>%
+  filter(X == "TRUMAN") %>%
+  select(Year, ACT.NA=Num.NA, ACT.1.16=Num.1.16, ACT.17.18=Num.17.18,
+    ACT.19.23=Num.19.23, ACT.24.27=Num.24.27, ACT.28.32=Num.28.32,
+    ACT.33.36=Num.33.36) %>%
+  gather(key=Range, value=Number, -Year) %>%
+  mutate(Range = factor(Range,
+    levels=c("ACT.33.36", "ACT.28.32", "ACT.24.27", "ACT.19.23", "ACT.17.18",
+      "ACT.1.16", "ACT.NA"),
+    labels=c("ACT 33-36", "ACT 28-32", "ACT 24-27", "ACT 19-23", "ACT 17-18",
+      "ACT 1-16", "ACT NA")
+    )) %>%
+  mutate(Year = as.factor(Year)) %>%
+  mutate(Number = if_else(is.na(Number), as.integer(0), Number)) %>%
+  ggplot() +
+    geom_bar(aes(x=Year, y=Number, fill=Range), position="fill",
+      stat="identity") +
+    theme_bw() +
+    theme(axis.text.x=element_text(angle=45, hjust=1)) +
+    scale_fill_manual(values=brewer.pal(9, "Purples")[3:9]) +
+    ylab("Percent") +
+  labs(fill="Truman")
+grid.arrange(g1, g2, g3, ncol=3)
+```
+
+```{r}
+g3 <- g3 + ggtitle("Admissions Office?")
+g5 <- g5 + ggtitle("General Public?")
+g4 <- g4 + ggtitle("Dishonest?")
+grid.arrange(g3, g5, g4, ncol=3)
+```
+
+
+```{r}
+g6
+```
+
+
+```{r}
+grid.arrange(g7, g9, ncol=2, widths=c(3,5))
+```
+
+
+```{r}
+grid.arrange(g8, g9, ncol=2)
+```
+
+
+```{r}
+tg <- textGrob("One may be more appropriate\nfor a general audience,\n and one for a data dashboard.")
+lay <- rbind(c(1, 2), c(3, 4))
+grid.arrange(g6, g9, tg, g10, layout_matrix=lay, widths=c(2,3), heights=c(3,2))
+```
+
+
+```{r}
+mo %>% gather(key=Range, value=Number, -School) %>%
+  mutate(Range = factor(Range,
+    levels=c("ACT.33.36", "ACT.28.32", "ACT.24.27", "ACT.19.23", "ACT.17.18",
+      "ACT.1.16", "ACT.NA"),
+    labels=c("ACT 33-36", "ACT 28-32", "ACT 24-27", "ACT 19-23", "ACT 17-18",
+      "ACT 1-16", "ACT NA")
+    )) %>%
+    ggplot() +
+      geom_bar(aes(y=Number, x="", fill=Range), position="fill", stat="identity") +
+      coord_polar("y", start=0) +
+      theme(axis.text.x=element_blank()) +
+      xlab("") + ylab("") +
+      facet_wrap(facets="School")
+
+```
+
+

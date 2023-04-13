@@ -1,0 +1,252 @@
+---
+title: "Mapping Examples with raster"
+author: "Scott Thatcher"
+date: "April 21, 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+# Installation note: To get the "rnaturalearthhires" package, you'll have to do
+# the following:
+#
+# install.packages("devtools")
+# devtools::install_github("ropensci/rnaturalearthhires")
+#
+# The rnaturalearthhires is large and not hosted on CRAN.
+# You may or may not see other messages about upgrading packages when you run
+# the devtools command. I chose the upgrade from CRAN option.
+#
+# Along the way, I was also prompted to install the rgeos packages:
+# install.packages("rgeos")
+
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(raster)
+# install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")
+library(spDataLarge)
+```
+
+# Introduction
+
+Here is some code that summarizes things we saw in the last lecture on the
+`sf` package. We should get a map of Missouri with an underlying topographical
+layer, a boundary in blue, and our simplistic local map of cities and roads
+superimposed on top.
+
+```{r}
+# Make a map of Missouri
+map_sf <- ne_states(country="united states of america", returnclass="sf")
+mo_sf <- map_sf[map_sf$name=="Missouri", "region"]
+
+# Define our own data frame.
+local <- data.frame(
+  name = c("Kirksville", "Columbia", "St. Louis", "Kansas City", "US63", "I70")
+)
+# Define our spacial elements
+kv <- st_point(x = c(-92.61, 40.17))
+co <- st_point(x = c(-92.33, 38.95))
+st <- st_point(x = c(-90.20, 38.63))
+kc <- st_point(x = c(-94.58, 39.10))
+# Note that individual points are stored in the _rows_ of the matrices.
+us63 <- st_linestring(x = matrix(c(-92.61, 40.17,
+                                  -92.33, 38.95),
+  nrow=2, byrow=TRUE))
+i70 <- st_linestring(x = matrix(c(-94.58, 39.10,
+                                 -92.33, 38.95,
+				 -90.20, 38.63),
+  nrow=3, byrow=TRUE))
+# At this stage, individual elements are combined into an sf "column."
+local_sfc <- st_sfc(kv, co, st, kc, us63, i70)
+# That sf column is then combined with the regular columns of the data frame.
+local_sf <- st_sf(local, local_sfc, crs=4326)
+
+tmap_mode("plot")
+# install.packages("OpenStreetMap")
+# see ?openmap for type list
+mo_topo <-read_osm(mo_sf, type="https://a.tile.opentopomap.org/{z}/{x}/{y}.png")
+mo_topo <- as(mo_topo, "Raster")
+tm_shape(mo_topo) + tm_rgb() +
+  tm_shape(mo_sf) + tm_borders(col="blue", lwd=2) +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5)
+```
+
+There's something different about the base layer compared to the rest---the
+data from the `rnaturalearth` package and our own additions are all "vector"
+objects--specified by points, lines, polygons, etc. that dictate how the map
+will be drawn.
+
+On the other hand, the topographical layer is a "raster" object--a matrix of
+pixels, each of which has a value assigned (in this case indicating the type
+of terrain and colored according to conventional elevation colors. The `sf`
+package doesn't handle raster mapping data, but the `raster` package does.
+
+# The `raster` Data Structure
+
+The `raster` data structure can be one of three types: _layer_, _brick_, and
+_stack_. The _layer_ is the simplest. It consists of one numeric array
+(ordered in row-order, **not** column-order like regular R arrays) that makes
+up the pixels of the raster image, and extra elements that specify how the
+raster image is mapped to geographic information:
+
+```{r}
+mo_topo
+```
+
+The parts of the data structure include:
+
+- `class`: This one is a rater brick.
+- `dimensions`: Number of pixels in rows and columns.
+- `resolution`: In units of the CRS, how big is each pixel?
+- `extent`: Minimum and maximum values of x and y values in units of the CRS.
+   Note that -9920670 ~ -10661406 + 603 * 1228.419
+- `coord. ref.`: The specification of the CRS, as discussed last time.
+- `data source`: The `raster` package can read large raster structures from
+  disk without storing them in memory, but small structures will be stored in
+  memory.
+- `names`: This one doesn't have a fancy name.
+- `values`: This raster structure's data array is made up of integers between
+  0 and 255 (presumably representing elevation).
+
+# Getting `raster` Data
+
+## Downloading Directly
+
+Sources like OpenStreetMaps and other more "scientific" sources allow
+downloading of raster mapping data. This is especially common for data sets
+involving the natural world, where there are no convenient borders or
+streets---just measurements taken in a grid.
+
+## Loading from Disk
+
+If you've already downloaded a raster file from somewhere, you can load it
+from disk with the `raster` command. There are several raster file formats.
+Often they seem to consist of several files with the same file name, but
+different extension. One file will often hold the meta-data (coordinate
+system, dimensions, etc.) while the other file will hold the actual array of
+raster values. So, if you're downloading raster data and saving it to disk,
+make sure you keep all those files together!
+
+## Making Your Own `raster` Structure
+
+Let's try one by hand. I'm going to make a 2x3 grid that (roughly) puts all my
+Missouri cities in separate squares. More realistically, you might do this if
+you have a bitmapped image to start with (rather than my 2x3 grid), and you
+want to add the meta-data to turn it into a mapping object.
+
+The `raster` function is also used when making a raster object by hand. 
+
+```{r}
+local_raster <- raster(
+  nrows = 2,
+  ncols = 3,
+  # res = ,	# Note: You could set res, rather than nrows and ncols.
+  xmn = -95.5,	# These are latitude and longitude limits.
+  xmx = -89.5,
+  ymn = 38.5,
+  ymx = 40.5,
+  vals = c(     1,  17000,      1,				# Populations (approx.)
+           460000, 121000, 319000)
+)
+tmap_mode("view")
+tm_shape(mo_topo) + tm_rgb() +
+  tm_shape(mo_sf) + tm_borders(col="blue", lwd=2) +
+  tm_shape(local_raster) + tm_raster(style="log10", alpha=0.5)  +
+  tm_shape(local_sf) + tm_lines(col="blue", lwd=2) +
+  tm_dots(col="red", size=0.5) + tm_text("name", xmod=1.75, ymod=-0.5) 
+```
+
+Let's try it with a pre-existing raster. How about an old map of Missouri from
+1836? Of course, the image of the map has no meta-data, so we have to provide
+the extent of the map in longitude and latitude explicitly. A CRS might have
+to be set, but the default is to assume the extent is latitude and longitude
+if not set.
+
+The extents of the map were calculated by matching up the old map to a 
+pre-existing map. Other options might be to interpolate using the 
+longitude/latitude coordinates of known points, such as St. Louis of Jefferson
+City.
+
+```{r}
+# Note: The video shows use of the "raster" command to load the image.
+# That used to work, but now use of the "raster" command creates an error
+# because the raster command only creates one layer, not the three necessary
+# for the red/green/blue information in a color picture. To get all the layers
+# for the RGB image, "stack" is the command to use now.
+old_map <- stack("images/1836-Map-of-Missouri_rotated.png")
+extent(old_map) <- c(-95.0110, -88.7550, 35.3271, 41.2503)
+crs(old_map) <- 4326 # The "WGS84" CRS
+tm_shape(old_map) + tm_rgb() +
+  tm_shape(mo_sf) +  tm_borders(col="blue", lwd=2) +
+  tm_shape(local_sf) +  tm_dots(col="blue")
+```
+
+# Raster Layers as Factors
+
+It's also possible for raster maps to act as "factors." They aren't really
+factor vectors, but an integer-valued raster map can contain attributes that
+map those integers to levels, and similar commands can be used to manipulate
+them.
+
+```{r}
+# Using data from the spDataLarge package. This is land use data.
+levels(nlcd)
+tm_shape(nlcd) + tm_raster()
+```
+
+You can also do some level manipulation.
+
+```{r}
+devel <- nlcd == 2
+names(devel) <- "Developed"
+tm_shape(devel)+ tm_raster()
+```
+
+
+
+# "Bricks" and "Stacks"
+
+Because only one variable can really be represented in a single raster layer,
+layers are usually combined into larger structures called "bricks" or
+"stacks."  Bricks are groups of layers that come from the same source (usually
+a single file) and are loaded into memory in one chunk, whereas stacks can
+combine layers from multiple sources as long as they share the same dimensions
+and pixel layout.  Usually you end up with a brick or stack because you got
+the data from somewhere else in that form.
+
+Here's a short, but real, example of why you might want to work with bricks
+and stacks. The Landsat satellites record views of the earth in multiple
+wavelengths, from ultraviolet to infrared. Each band has particular scientific
+interest:
+
+
+The following code unzips a file with several bands of Landsat data for the
+Coldsprings fire scar--a patch of land damaged by fire. There are 7 bands
+represented in the stack. 
+
+The `plotRGB` command plots a raster stack, choosing which layers, or bands,
+get mapped to the red, green and blue colors on screen.
+
+You can see the image in true color, but the fire scar it really stands out in
+the false color of the second example, where red in the image represents near
+infrared.
+
+```{r}
+unzip("data/landsat_bands.zip", exdir="LS")
+filenames <- paste0("LS/band", 1:7, ".png")
+lsat <- stack(filenames, bands=1)
+lsat
+plotRGB(lsat, r=4, g=3, b=2, stretch="lin") # "Real" color
+plotRGB(lsat, r=5, g=4, b=3, stretch="lin") # Red is now near infrared.
+```
+
+These images of the Coldsprings fire scar and analysis ideas taken from
+[https://www.earthdatascience.org/courses/earth-analytics/multispectral-remote-sensing-data/landsat-data-in-r-geotiff/]
+(https://www.earthdatascience.org/courses/earth-analytics/multispectral-remote-sensing-data/landsat-data-in-r-geotiff/)
+

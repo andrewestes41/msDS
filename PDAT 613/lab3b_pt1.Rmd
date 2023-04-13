@@ -1,0 +1,28 @@
+---
+title: "lab3b"
+author: "Andrew Estes"
+date: "2/9/2022"
+output: pdf_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, error=FALSE, warning=FALSE, tidy.opts=list(width.cutoff=60)) 
+```
+
+Assignment: Module 3B, Part 1.
+
+For this homework assignment, you'll be looking at creating a graphical "dashboard" to display data related to environmental conditions and occupancy in a particular office. You can find the data set at the UCI Machine Learning Repository:
+https://archive.ics.uci.edu/ml/datasets/Occupancy+Detection+
+
+Read about the data set, download it, and extract the contents from the ZIP file. We won't be using it for its original purpose (classification of occupancy status). Instead, we'll be looking to create graphical summaries.
+
+We will only be using the training data set, because it provides one contiguous time period.
+In this first part of the assignment, I'd like you to think about the data, look at the ranges of values, make some preliminary graphs---whatever you need to do to get a sense for what's in the data file. Nothing needs to be turned in from this section.
+```{r cars}
+library(tidyverse)
+library(lubridate)
+occ <- read.csv("datatraining.txt")
+occ <- occ %>%
+  mutate(Date=ymd_hms(date)) %>% select(-date) %>%
+  mutate(Occupancy=factor(Occupancy, labels=c("Not Occupied", "Occupied")))
+```

@@ -1,0 +1,232 @@
+---
+title: "Climate Change in Austin?"
+format: pptx
+editor: visual
+---
+
+```{r, include=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+#loading libraries
+library(tidyverse)
+library(lubridate)
+library(colorspace)
+library(patchwork)
+library(forecast)
+library(zoo)
+library(xts)
+library(fNonlinear)
+
+############################################################################
+#creating dataframe
+orig.df <- read.csv("austinClimateUPDATED.csv")
+
+#copying the original dataframe
+df <- orig.df
+
+#removing unnecessary data from df (info never changes)
+df <- df %>%
+  select(-NAME) %>%
+  mutate(AVERAGE = (TMAX + TMIN)/2)
+
+#changing the DATE format from character to Date
+df$DATE <- as.Date(df$DATE, "%m / %d/ %Y")
+#class(df$DATE)
+
+#df separating the date
+newDF <- df %>%
+  separate(DATE, c("YEAR", "MONTH", "DAY")) %>%
+  mutate(DECADE = floor(as.numeric(YEAR)/10)*10)
+
+############################################################################
+maxTemp <- newDF %>%
+  group_by(YEAR) %>%
+  select(YEAR, TMAX, TMIN) %>%
+  summarise(maxTemp = max(TMAX))
+
+minTemp <- newDF %>%
+  group_by(YEAR) %>%
+  select(YEAR, TMAX, TMIN) %>%
+  summarise(minTemp = min(TMIN))
+
+maxPRCP <- newDF %>%
+  group_by(YEAR) %>%
+  select(YEAR, TMAX, TMIN, PRCP, SNOW) %>%
+  summarise(maxPRCP = max(PRCP))
+
+minPRCP <- newDF %>%
+  group_by(YEAR) %>%
+  select(YEAR, TMAX, TMIN, PRCP, SNOW) %>%
+  summarise(minPRCP = min(PRCP))
+
+maxSNOW <- newDF %>%
+  group_by(YEAR) %>%
+  select(YEAR, TMAX, TMIN, PRCP, SNOW) %>%
+  summarise(maxSnow = max(SNOW))
+
+minSNOW <- newDF %>%
+  group_by(YEAR) %>%
+  select(YEAR, TMAX, TMIN, PRCP, SNOW) %>%
+  summarise(minSnow = min(SNOW))
+
+rangeDF <- merge(maxTemp, minTemp, by="YEAR")
+rangeDF <- merge(rangeDF, maxPRCP, by="YEAR")
+rangeDF <- merge(rangeDF, minPRCP, by="YEAR")
+rangeDF <- merge(rangeDF, maxSNOW, by="YEAR")
+rangeDF <- merge(rangeDF, minSNOW, by="YEAR")
+
+rangeDF <- rangeDF %>%
+  mutate(TempRange = maxTemp - minTemp) %>%
+  mutate(PRCPRange = maxPRCP - minPRCP) %>%
+  mutate(SnowRange = maxSnow - minSnow)
+
+rangeScaled <- rangeDF %>% 
+  mutate_each_(list(~scale(.) %>% as.vector),
+               vars = c("TempRange","PRCPRange", "SnowRange")) %>%
+  select(YEAR, TempRange, PRCPRange, SnowRange)
+
+
+###############################################################################
+#Graphing daily max/min temperature, precipitation amount, and snowfall
+Tempmax <- 
+  ggplot(data = df, aes(DATE, TMAX)) + 
+  geom_point() +
+  geom_smooth() +
+  ylim(10, 115)
+
+Tempmin <-
+  ggplot(data = df, aes(DATE, TMIN)) + 
+  geom_point() +
+  geom_smooth() +
+  ylim(10, 115)
+
+PRCPmax <- 
+  ggplot(data = df, aes(DATE, PRCP)) + 
+  geom_point() 
+
+Snowmax <- 
+  ggplot(data = df, aes(DATE, SNOW)) + 
+  geom_point()
+
+##############################################################################
+newMaxTemp.plot <- newDF %>%  
+  ggplot(aes(x=DECADE, y=TMAX, group=DECADE, fill=as.factor(DECADE))) + 
+  geom_violin() +
+  geom_boxplot(width=1.3, fill="white")+
+  scale_colour_viridis_d()
+
+
+newMinTemp.plot <- newDF %>%  
+  ggplot(aes(x=DECADE, y=TMIN, group=DECADE, fill=as.factor(DECADE))) + 
+  geom_violin() +
+  geom_boxplot(width=1.3, fill="white")+
+  scale_colour_viridis_d()
+
+newPRCP.plot <- newDF %>%  
+  ggplot(aes(x=DECADE, y=PRCP, group=DECADE, fill=as.factor(DECADE))) + 
+  geom_violin() +
+  geom_boxplot(width=1.3, fill="white")+
+  scale_colour_viridis_d()
+
+newSNOW.plot <- newDF %>%  
+  ggplot(aes(x=DECADE, y=SNOW, group=DECADE, fill=as.factor(DECADE))) + 
+  geom_violin() +
+  geom_boxplot(width=1.3, fill="white")+
+  scale_colour_viridis_d()
+
+
+##############################################################################
+#Graphing the range of Temperature, Precipitation, and Snow by year
+plot.TempRange <- ggplot(rangeScaled, aes(x=YEAR, y=TempRange, group=1)) +
+  geom_line()
+
+plot.PRCPRange <- ggplot(rangeScaled, aes(x=YEAR, y=PRCPRange, group=1)) +
+  geom_line()
+
+plot.SnowRange <- ggplot(rangeScaled, aes(x=YEAR, y=SnowRange, group=1)) +
+  geom_line()
+
+
+############################################################################
+#Graphing daily max/min temperature, precipitation amount, and snowfall
+Tempmax <- 
+  ggplot(data = df, aes(DATE, TMAX)) + 
+  geom_point() +
+  geom_smooth() +
+  ylim(10, 115)
+
+Tempmin <-
+  ggplot(data = df, aes(DATE, TMIN)) + 
+  geom_point() +
+  geom_smooth() +
+  ylim(10, 115)
+
+PRCPmax <- 
+  ggplot(data = df, aes(DATE, PRCP)) + 
+  geom_point() 
+
+Snowmax <- 
+  ggplot(data = df, aes(DATE, SNOW)) + 
+  geom_point()
+```
+
+## Question and Methods
+
+Question: Does climate change warrant alterations to current husbandry standards?
+
+Method: Let's look at historical data for temperature, precipitation, and snowfall
+
+## Daily Temperature - Scatterplot
+
+```{r}
+plot(df$DATE, df$TMAX, 
+     col="red", 
+     main="Scatterplot of Daily Temperature", 
+     xlab='DATE', 
+     ylab='Temperature')
+points(df$DATE, df$TMIN, col="blue")
+points(df$DATE, df$AVERAGE, col='black')
+legend(100, 75, 
+       legend=c('Max Temp', 'Min Temp', 'Avg Temp'), 
+       col=c('red', 'blue','black'))
+```
+
+## Temperature by Decade - Violin Plot
+
+```{r}
+newMaxTemp.plot
+```
+
+## Normalized Temperature
+
+```{r}
+plot.TempRange
+```
+
+## Daily Precipitation - Scatterplot
+
+```{r}
+PRCPmax
+```
+
+## Normalized Precipitation
+
+```{r}
+plot.PRCPRange
+```
+
+## Daily Snowfall - Scatterplot
+
+```{r}
+Snowmax
+```
+
+## Normalized Snowfall
+
+```{r}
+plot.SnowRange
+```
+
+## Conclusions and Further Research
+
+While temperature extremes are less common, temperature is steadily increasing. More concerning than temperature swings are the extreme range of precipitation and snowfall in recent years.
+
+Further work can include researching dynamical systems stability via the use of the Lyapunov Function or the incorporation of one of the National Weather Service models outlined by Harry Glahn's paper "Statistical Weather Forecasting"

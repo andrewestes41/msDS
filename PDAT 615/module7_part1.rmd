@@ -1,0 +1,291 @@
+---
+title: "Module 7"
+author: "Andrew Estes"
+date: "5/2/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+```
+
+```{r, echo=FALSE, warning=FALSE,  message=FALSE}
+library(tidyverse)
+library(keras)
+```
+
+# Introduction
+
+Analysis of sequential data is one of the tasks for which recurrent neural
+networks, and LSTM networks in particular, are touted as being especially
+applicable. We saw a classification problem involving numeric sequences of
+sensor data in the lectures. In this homework, you'll look at a classification
+problem involving text strings.
+
+In particular, those who have had PDAT 613 will remember the problem of
+classifying headlines as coming either from _The Onion_ (a satirical "news"
+source) or from _The Huffington Post_ (a perhaps click-baity, but legitimate
+news source). Using a tuned support vector machine in that class, we achieved
+an accuracy of approximately 79%. Can we do better with neural networks?
+
+# The Data
+
+Let's load the data and take a look at its raw form.
+
+```{r}
+news.raw <- read.csv("headlines.csv") %>% select(headline, is_sarcastic)
+head(news.raw)
+```
+
+In order to work with this data, we need it to look like a matrix of numbers,
+where each row represents a word, and the columns identify _which_ word:
+
++------+-----+-------+-----+-----+
+| Step | Man | Bites | Dog | ... |
++:====:+:===:+:=====:+:===:+:===:+
+|  1   |  1  |   0   |  0  | ... |
++------+-----+-------+-----+-----+
+|  2   |  0  |   1   |  0  | ... |
++------+-----+-------+-----+-----+
+|  3   |  0  |   0   |  1  | ... |
++------+-----+-------+-----+-----+
+
+This is achieved in several steps:
+
+## Step 1: Integer Tokenizer
+
+A maximum number of words (`num.words`) is established, and the most frequently
+occurring words are encoded with integers up to that maximum number.
+
+```{r}
+# Define the number of words to be used.
+num.words <- 10000
+# Create a tokenizer object that converts words to integers.
+tokenizer <- text_tokenizer(num_words=num.words)
+# Fit the tokenizer to our lexicon so that it will tokenize our headlines.
+tokenizer %>% fit_text_tokenizer(news.raw$headline)
+# Convert the original words to integer tokens.
+news.seq <- texts_to_sequences(tokenizer, news.raw$headline)
+head(news.seq)
+```
+
+Note that the end result is a list of integer sequences, one for each headline.
+
+# Step 2: Pad the sequences to have the same length.
+
+Padding the sequences (headlines) to have the same length is a necessary step
+in using our keras/tensorflow package.  To do this, 0's are inserted at the
+beginning of each sequence (headline) to give them all the same number of
+"words." The `pad_sequences` command also converts our object into an array.
+
+In the last step, we creates a _list_ of integer sequences because each 
+headline had a different length, and lists in R are the objects that can 
+handle collecting objects of different lengths. Once each sequence has been
+padded, they can be stored more efficiently in an array.
+
+```{r}
+# Pad the sequences.
+news.seq <- pad_sequences(news.seq)
+head(news.seq)
+# Find out the maximum headline length for later use. It's possible to cut off
+# texts that are too long, but here we are just letting the longest headline
+# determine this length.
+max.len <- dim(news.seq)[2]
+```
+
+Now the first index (rows) of the `news.seq` array indexes the headlines.
+
+# Step 3: Convert integer sequences into "one hot" encoding.
+
+Steps 3 and 4 are both done in the first layer of the neural network, so we'll
+see the code in a moment. But in this step, we want to convert from a 
+two-dimensional array where each headline is single row and each word is an
+integer:
+
++-----+-------+-----+-----+
+| Man | Bites | Dog | ... |
++:===:+:=====:+:===:+:===:+
+| 27  |  10   | 105 | ... |
++-----+-------+-----+-----+
+
+to a three-dimensional array where the first index still indexes which headline
+we're talking about, but the next two dimensions encode the one hot encoding
+of the headline:
+
++-----+-------+-----+-----+
+| Man | Bites | Dog | ... |
++:===:+:=====:+:===:+:===:+
+|  1  |   0   |  0  | ... |
++-----+-------+-----+-----+
+|  0  |   1   |  0  | ... |
++-----+-------+-----+-----+
+|  0  |   0   |  1  | ... |
++-----+-------+-----+-----+
+
+Step 4: Dimension Reduction
+
+Since the array above can get very large (10000 words gives 10000 columns for
+each headline, for example), dimensional reduction techniques are employed
+to create a matrix with fewer columns that still contains most of the 
+information of the matrix from Step 3. (That's the `output_dim` parameter
+in the code below.)
+
+# Question 1: Tuning a LSTM Networks
+
+As previously mentioned, we got about 79% accuracy with a tuned SVM in PDAT 613
+when we considered this data set. Your assignment is to do better with a LSTM
+neural network. The code below should start you out, although you'll need to
+finish it.
+
+There are several obvious tuning parameters you can adjust:
+
+- `num.words`, which defines how many words will be included in the "vocabulary"
+  of the tokenizer, 
+
+- `out.dim`, which defines how many "columns" each headline will be reduced to
+  by dimension reduction,
+  
+- the number of epochs you run the model (it could get worse over time, so
+  don't run too long), 
+
+- the number of units in the LSTM layer, and
+
+- any decay rate you decide to add to a decay layer.
+
+I'd suggest keeping the number of layers small and the number epochs small. You
+might be able to do much better than I did, but I certainly was able to beat
+79% accuracy without many layers.
+
+Also, I think you can get by without making a train/test split, and simply 
+using the `validation_split=0.2` option in the `fit` command in order to
+monitor your network's performance.
+
+Specifically, your submission should
+
+- Define the neural network with appropriate code.
+
+- Run the fit command to fit the neural network.
+
+- Output a graph showing the training and validation accuracy of the final
+  model. 
+  
+- Include a brief comment on how well the tuning did and any patterns you saw
+  in the graph that were worth noting.
+
+Here's some partial code to get you started:
+
+```{r}
+out.dim <- 10
+
+model.lstm <- keras_model_sequential() %>%
+  layer_embedding(input_dim=num.words, output_dim=out.dim, input_length=max.len, 
+                  mask_zero=TRUE) %>%
+  layer_lstm(units=32) %>%
+  layer_dense(units=16, activation="relu") %>%
+  layer_dropout(rate=0.2) %>%
+  layer_dense(units=1, activation="sigmoid") %>%
+  compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics="accuracy"
+  )
+```
+
+```{r}
+history <- model.lstm %>% fit(
+  x= news.seq,
+  y= news.raw$is_sarcastic,
+  validation_split = .2,
+  epochs=10,
+  batch_size=25
+)
+
+
+plot(history)
+```
+The tuning did a good job. The LSTM model had a better accuracy (83%) than the SVM model (79%). 
+
+\newpage
+
+# Question 2: Making Predictions
+
+We might want to use our neural network to predict the source of new headlines.
+In order to do that, the new headline will also have to be tokenized:
+
+```{r}
+headline.text <- c("It was the best of times, it was the worst of times.")
+new.headline <- texts_to_sequences(tokenizer, headline.text)
+new.headline <- pad_sequences(new.headline, maxlen=max.len)
+model.lstm %>% predict(new.headline)
+```
+
+Since a "1" in the is_sarcastic column indicated a satirical headline, our
+model thinks it's highly unlikely that this headline came from the Onion.
+
+With that example, now collect a few examples of headlines from both
+[_The Onion_](https://www.theonion.com/) and
+[_The Huffington Post_](https://www.huffpost.com/),
+put them into a character vector, and see what the model predicts. It was
+trained on headlines from a few years ago--does it still have what it takes to
+make new predictions (at least for your small sample)?
+
+[Note: If you're morally opposed to visiting either site, feel free to try on
+other headlines from other sources.]
+
+```{r}
+headline.text2 <- c("Best Ways To Make Friends As An Adult",
+                   "Ohio Law Mandates Rape Victims Send Thank You Notes For Gift Of Parenthood",
+                   "Biden Tries To Boost Approval Ratings By Showing A Little Ankle",
+                   "JAN. 6 PANEL SEEKS MORE GOP BIG LIE BOOSTERS",
+                   "Ex-Defense Secretary: Trump Told Pentagon To Shoot George Floyd Protesters",
+                   "Gas Giants Have Been Ghostwriting Letters Of Support From Elected Officials",
+                   "This is real",
+                   "Royals win"
+)
+
+new.headline2 <- texts_to_sequences(tokenizer, headline.text2)
+new.headline2 <- pad_sequences(new.headline2, maxlen=max.len)
+model.lstm %>% predict(new.headline2)
+```
+
+\newpage
+
+# Question 3:  Tuning a Regular Neural Network
+
+Ideal homework for the section of recurrent neural networks would give you
+a data set and problem that illustrates how LSTM networks perform better than
+alternatives. Is that true in this case? Create a "plain" neural network
+using `layer_dense`, rather than `layer_lstm`. You'll need a `layer_flatten`
+before your first layer_dense. Do everything you did for the last part. Then
+comment on the performance of the plain neural network for this example data.
+
+```{r}
+k_clear_session()
+
+model.nn <- keras_model_sequential() %>%
+  layer_flatten() %>%
+  layer_dense(units=16, activation="relu") %>%
+  layer_dropout(rate=0.2) %>%
+  layer_dense(units=16, activation="relu") %>%
+  layer_dense(units=1, activation="sigmoid") %>%
+  compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics="accuracy"
+  )
+```
+
+```{r}
+history.nn <- model.nn %>% fit(
+  x= news.seq,
+  y= news.raw$is_sarcastic,
+  validation_split = .2,
+  epochs=10,
+  batch_size=25
+)
+
+plot(history.nn)
+```
+
+The accuracy was 56% on the regular neural network. 
+The accuracy was 83% on the LSTM model.

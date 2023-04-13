@@ -1,0 +1,329 @@
+---
+title: Module 1 Coding Examples
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Set-up
+
+First, we'll load some of the usual packages.
+
+```{r Packages}
+library(tidyverse)
+library(caret)
+library(pROC)
+```
+
+# Our Data Set 
+
+We'll use the `cars` data set from the `caret` package.
+
+```{r}
+data("cars")
+str(cars)
+```
+
+Note that brand and type of car are categorical variables have already been
+split into indicator variables. Normally this might be done automatically by
+the modeling command when it sees a factor variable.
+
+We'd probably expect that mileage would predict sale price, but that the
+relationship would depend on brand and other factors.
+
+Let's put the brand data back together in order to make a graph.
+
+```{r}
+brand.names <- c("Buick", "Cadillac", "Chevy", "Pontiac", "Saab", "Saturn")
+car.types <- c("coupe", "hatchback", "sedan", "wagon")
+mycars <- cars %>%
+  mutate(Brand = factor(case_when(
+    Buick == 1 ~ "Buick",
+    Cadillac == 1 ~ "Cadillac",
+    Chevy == 1 ~ "Chevy",
+    Pontiac == 1 ~ "Pontiac",
+    Saab == 1 ~ "Saab",
+    Saturn == 1 ~ "Saturn"))) %>%
+  mutate(Type = factor(case_when(
+    coupe == 1 ~ "coupe",
+    hatchback == 1 ~ "hatchback",
+    sedan == 1 ~ "sedan",
+    wagon == 1 ~ "wagon"))) %>%
+  select(!contains(brand.names) & !contains(car.types))
+ggplot(mycars, aes(x=Mileage, y=Price, color=Brand)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE)
+```
+
+In particular, let's look just at the Saturn brand.
+
+```{r}
+saturn <- mycars %>% filter(Brand == "Saturn")
+ggplot(saturn, aes(x=Mileage, y=Price)) + geom_point() +
+  geom_smooth(method="lm", se=FALSE)
+```
+
+It looks like a line fits fairly well, but let's investigate just how well.
+
+# Cross-Validation from Scratch
+
+We've seen that cross-validation provides a good way to honestly assess a
+predictive model's performance. Because we average more than one calculation
+of performance, there's a hope that the resulting final measure has less
+variance than what we'd get from just one train/test set. Let's try it from
+scratch.
+
+## Step 1: Assessing one fold.
+
+First, let's create the folds.
+
+```{r}
+set.seed(23948)
+k <- 10
+folds <- rep(1:k, each=ceiling(nrow(saturn)/k))
+folds <- sample(folds, nrow(saturn))
+```
+
+Now, given a particular fold, `i`, find the RMSE on that fold.
+
+```{r}
+i <- 1
+fit <- lm(Price ~ Mileage, data=saturn[folds != i, ])
+RMSE(saturn$Price[folds==i], predict(fit, newdata=saturn[folds==i, ]))
+```
+
+## Step 2: Put it in a loop
+
+```{r}
+rmse.vec <- numeric(k)
+for(i in 1:k){
+  fit <- lm(Price ~ Mileage, data=saturn[folds != i, ])
+  rmse.vec[i] <-
+    RMSE(saturn$Price[folds==i], predict(fit, newdata=saturn[folds==i, ]))
+}
+rmse.vec
+mean(rmse.vec)
+```
+
+## Now, Using LOESS
+
+```{r}
+rmse.vec <- numeric(k)
+for(i in 1:k){
+  fit <- loess(Price ~ Mileage, data=saturn[folds != i, ], degree=1, span=0.5)
+  # Note: na.rm=TRUE is a quick fix because loess won't predict outside the
+  # range of training data.
+  rmse.vec[i] <-
+    RMSE(saturn$Price[folds==i], predict(fit, newdata=saturn[folds==i, ]), na.rm=TRUE)
+}
+rmse.vec
+mean(rmse.vec)
+```
+
+
+## Making a CV Function
+
+Note that we aren't trying to do something completely general. This function
+only works for the `saturn` data frame, but it will help us run the code many
+times.
+
+```{r}
+# Note the dot construction. It passes extra parameters to the modeling function.
+rmse.saturn <- function(method=lm, ...){
+  set.seed(23948)
+  k <- 10
+  folds <- rep(1:k, each=ceiling(nrow(saturn)/k))
+  folds <- sample(folds, nrow(saturn))
+  rmse.vec <- numeric(k)
+  for(i in 1:k){
+    fit <- method(Price ~ Mileage, data=saturn[folds != i, ], ...)
+    rmse.vec[i] <-
+      RMSE(saturn$Price[folds==i], predict(fit, newdata=saturn[folds==i, ]),
+           na.rm=TRUE)
+  }
+  return(mean(rmse.vec))
+}
+rmse.saturn(lm)
+rmse.saturn(loess, span=0.5)
+```
+
+# Model Tuning
+
+What values of `span` give the lowest RMSE? With our function, we can try a 
+whole range of values easily.
+
+```{r}
+span.vec <- seq(0.2, 1.0, by=0.1)
+rmse.vec <- map_dbl(span.vec, ~rmse.saturn(method=loess, span=.x))
+plot(x=span.vec, y=rmse.vec)
+span.best <- span.vec[which.min(rmse.vec)]
+```
+
+## Visualizing Both Fits
+
+Which fit would you use? It might depend on some factors...
+
+- Is this really a random sample of prices from all Saturns?
+
+- Do we think the zigs are random variation or a real feature?
+
+- Is this the correct level of detail? Are there more factors that are important?
+
+
+```{r}
+saturn.plot <- data.frame(
+  Mileage = seq(min(saturn$Mileage, na.rm=TRUE), max(saturn$Mileage, na.rm=TRUE), by=100)
+)
+# Why do it this way, rather than with geom_smooth?
+fit.lm <- lm(Price ~ Mileage, data=saturn)
+fit.loess <- loess(Price ~ Mileage, data=saturn, degree=1, span=span.best)
+saturn.plot$lm.Price <- predict(fit.lm, newdata=saturn.plot)
+saturn.plot$loess.Price <- predict(fit.loess, newdata=saturn.plot)
+ggplot(saturn) +
+  geom_point(aes(x=Mileage, y=Price)) +
+  geom_line(data=saturn.plot, aes(x=Mileage, y=lm.Price), color="blue") +
+  geom_line(data=saturn.plot, aes(x=Mileage, y=loess.Price), color="red") 
+  
+```
+
+# The `caret` package and `train`
+
+The `caret` package provides the `train` command, which automates the job of
+parameter selection and model fitting.
+
+## Measureing CV-RMSE for `lm` with no Tuning Parameters
+
+```{r}
+lm.train <- train(
+  Price ~ Mileage, data=saturn, method="lm",
+  trControl = trainControl(method="cv", number=10)
+)
+lm.train
+```
+
+## Model Tuning for `span` and Measureing CV-RMSE for `loess`
+
+Mostly the best model occurs at `span=0.3` and occasionally for `span=1.0`.
+
+```{r}
+# Warning: This isn't quite the same LOESS method. In this case, I've checked,
+# and it seems to give the same results.
+loess.train <- train(
+  Price ~ Mileage, data=saturn, method="gamLoess",
+  trControl = trainControl(method="cv", number=10),
+  tuneGrid = data.frame(span=seq(0.1, 1.0, by=0.05), degree=1)
+)
+plot(loess.train)
+loess.train
+```
+
+## Ploting the Best Model
+
+The `train` function provides lots of output.
+
+```{r}
+loess.train$bestTune
+saturn.plot$train.Price <- predict(loess.train$finalModel, newdata=saturn.plot)
+saturn.plot %>%
+  pivot_longer(contains("Price"), names_to="Method", values_to="Price") %>%
+  ggplot() +
+  geom_line(aes(x=Mileage, y=Price, color=Method)) +
+  geom_point(data=saturn, aes(x=Mileage, y=Price))
+```
+
+# Classification with Logistic Regression
+
+Let's see if we can use a Cadillac's price and Mileage to predict whether it's
+a 6 or 8 cylinder car. Of course, 8 we'd expect 8 cylinders to be more pricey.
+
+First, let's define the data set and visualize.
+
+```{r}
+# Logistic regression works with a 0/1 variable or a factor variable, but
+# `caret` functions like factors.
+# Adding "C" in front of cylinders to avoid an error related to names starting
+# with a number that we run into later.
+cad <- mycars %>% filter(Brand=="Cadillac") %>%
+  select(Mileage, Price, Cylinder) %>%
+  mutate(Cylinder = factor(case_when(
+    Cylinder == 6 ~ "C6",
+    Cylinder == 8 ~ "C8"
+  )))
+ggplot(cad) +
+  geom_point(aes(x=Mileage, y=Price, color=Cylinder))
+```
+
+## The Logistic Regression Model with Train and Test Set
+
+In making the train/test set, let's see how `createDataPartition` balances
+categories.
+
+```{r}
+# We'll use the `caret` `createDataPartition` here.
+ind <- createDataPartition(cad$Cylinder, p=0.70, list=FALSE)
+cad.train <- cad[ind, ]
+cad.test <- cad[-ind, ]
+table(cad.train$Cylinder)/sum(table(cad.train$Cylinder))
+table(cad.test$Cylinder)/sum(table(cad.test$Cylinder))
+```
+
+Here are the single train/test set and results.
+
+```{r}
+cad.fit <- glm(Cylinder ~ Mileage + Price, data=cad.train, family="binomial")
+cad.prob <- predict(cad.fit, newdata=cad.test, type="response")
+# One quick way to try to deal with imbalance in categories in the training set
+# is to set the threshold equal to the percentage in the top class.
+cad.pred <- factor(if_else(cad.prob >= 0.75, "C8", "C6"))
+# The `caret` confusionMatrix` command gives a good summary.
+# Remember that `data` is actually the predicted values, and
+# `reference` is actually the real observed values.
+# We also need to tell it which is the "positive" class.
+# `glm` assumes that the last class is positive, but by default 
+# `confusionMatrix` goes the other way if we don't correct it.
+confusionMatrix(data=cad.pred, reference=cad.test$Cylinder, positive="C8")
+```
+
+Note that we didn't do a good job identifying 6-cylinder cars, even with a
+higher threshold for choosing "8."
+
+## The `train` Function
+
+We don't have any parameters to tune her, but we can use the `train` function
+to assess accuracy with cross-validation.
+
+```{r}
+# Note that `train` allows extra parameters for the model to be entered. 
+# In this case `family`.
+cad.fit2 <- train(Cylinder ~ Mileage + Price, data=cad.train, method="glm",
+                  trControl=trainControl(method="cv", number=10),
+                  family="binomial")
+cad.fit2
+cad.fit2$finalModel
+confusionMatrix(cad.fit2)
+```
+
+## A ROC Curve
+
+To get a ROC curve from `train` output, we need to add two parameters to the
+`trControl` option. This code will then pull out the observed values and
+predicted probabilities from the output. If you're doing model tuning, the
+`"final"` setting means that you only get probabilities for each point using the
+final best tuning parameters. Use `repeatedcv` as a method if you want a more
+fine-grained ROC curve.
+
+```{r}
+# To plot a ROC curve, we need to save the probability calculations from the 
+# logistic regression in `train`.
+cad.fit3 <- train(Cylinder ~ Mileage + Price, data=cad.train, method="glm",
+                  trControl=trainControl(method="cv", number=10, 
+                                         savePredictions="final", classProbs=TRUE),
+                  family="binomial")
+cad.fit3$pred
+cad.roc <- roc(cad.fit3$pred$obs ~ cad.fit3$pred$C8)
+ggroc(cad.roc) +
+  geom_text(aes(x=cad.roc$specificities, y=cad.roc$sensitivities,
+                label=round(cad.roc$thresholds, 3), hjust=1, vjust=0))
+auc(cad.roc)
+```
+
