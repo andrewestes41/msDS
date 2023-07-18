@@ -1,0 +1,316 @@
+---
+title: "Paper Template"
+author: "Scott Thatcher"
+date: 2022
+fontsize: 12 pt
+geometry: left=1in, right=1in, top=1in, bottom=1in
+# These font options can be uncommented if you want to use something
+# besides the default. This choice works on Windows.
+# mainfont: Cambria
+# sansfont: Calibri
+# monofont: Consolas
+# mathspec: false
+# mathfont: Cambria Math
+# Bookdown is necessary for enhanced cross-references.
+output:
+  bookdown::pdf_document2:
+    toc: no
+    latex_engine: xelatex
+    keep_tex: yes
+    includes:
+      in_header: includes/pdf_header.tex
+      before_body: includes/pdf_titlepage.tex
+  bookdown::html_document2: default
+  word_document: default
+# Lots of styles to choose from.
+biblio-style: apalike
+bibliography: thesis_template_bib.bib
+linkcolor: blue
+urlcolor: blue
+citecolor: blue
+---
+
+```{r setup, include=FALSE}
+# You can set default chunk options here.
+# cache=TRUE save compilation time be caching code chunk results, but 
+# be careful because they don't automatically regenerate unless 
+# the code in the chunk changes!
+# echo=FALSE set because in a formal report, you likely don't want to
+# show all your code, unless the report is discussing the code.
+knitr::opts_chunk$set(echo=FALSE, cache=FALSE, fig.pos="ht", out.extra="")
+library(tidyverse)            # Usually this is a good package to have.
+library(knitr)                # For the kable command.
+```
+
+\cleardoublepage
+\pagenumbering{roman}
+
+# Dedication {-}
+
+Dedication goes here.
+
+\newpage
+
+# Acknowledgements {-}
+
+Acknowledgements go here.
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\listoftables
+
+\newpage
+
+\listoffigures
+
+\newpage
+
+# Abstract {-}
+
+Abstract goes here.
+
+\cleardoublepage
+\pagenumbering{arabic}
+
+# Note on Reading This Document
+
+You'll see some weird coding in the Rmd file for this document. That's because
+it's awkward to convince the R Markdown to display R Markdown formatting code
+without actually interpreting or executing it. This document is designed to 
+look good when knitted. If you're reading the Rmd file to see how things are
+done, you can likely safely ignore any coding that looks very strange.
+
+Also note that this is a quick-and-dirty template that puts all text in one
+file. If you're using Bookdown or Quarto, you might create a more complex book
+structure with individual chapters in different files. There may also be ways
+to put more of the formatting into a Pandoc or TeX template or header file.
+
+Finally, Quarto simplifies some aspects of cross-referencing, etc. Since
+Truman's virtual desktop has not yet started to support Quarto, this template
+still used Bookdown.
+
+# Basic Formatting
+
+- `**Bold**` gives **bold**.
+
+- `_Italic_` gives _italic_.
+
+- Verbatim code can be put inside single backticks: `` `code here` ``.
+
+- Code blocks can be put between triple backticks. Note that this code is not
+  evaluated without specifying that you run R
+  (compare to code chunks that start with  `` ```{r} ``).
+
+  ````
+  ```
+  code here...
+  ```
+  ````
+
+- Blank lines start new paragraphs.
+
+- `#`, `##`, `###` give 1st, 2nd and 3rd-level headings.
+
+- `--` given an endash: 1--2.
+
+- `---` gives an emdash---starts a new thought.
+
+- Dashes created bulleted lists (note the space between items):
+
+  ```
+  - Item 1
+        
+  - Item 2
+  ```
+
+The R Studio Cheat Sheats [@cheat] are a good place to start to be
+reminded of all the R Markdown options.
+
+# Chunk Options
+
+Some important chunk options include
+
+- `echo=TRUE` or `echo=FALSE`: Show your code?
+
+- `message=TRUE` or `message=FALSE`: Display messages from the code? 
+  Often you'll want to set to `FALSE` to get rid of annoying
+  package load messages.
+
+- `warning=TRUE` or `warning=FALSE`: Show warnings? You can turn them off
+  if you have to, but it's usually better to figure out why you're
+  getting a warning and fix it.
+  
+- `cache=TRUE` or `cache=FALSE`: Cache the results from the code chunk?
+  Speeds compilation, but chunk will only be re-evaluated if its 
+  code changes. Can cause confusion, sometimes, but also useful if you know
+  what you're doing.
+
+# Mathematics
+
+There's a lot that can be said about formatting mathematics. It's based on TeX
+formatting language, but can be rendered in any output mode. Here are the
+basics.
+
+Inline mathematical formulas are put inside single dollar signs: `$x + 1$`,
+which generates $x + 1$.
+
+Display-style mathematics is put inside paired double dollar signs:
+`$$x + 1$$` generates
+$$x + 1$$.
+
+- Most math is entered similarly to how you'd do it on your calculator.
+
+- Backslashes denote special typesetting commands for things like Greek
+  letters (`$\beta$`), integrals (`$\int$`) or special functions (`$\log$`).
+  
+- Superscripts with `^`
+
+- Subscripts with `_`
+
+- Grouping with curly braces: `{}`
+
+- Fractions with `\frac{num}{denom}`
+
+- Big paretheses with `\left(` and `\right)`
+
+Here's a good example from logistic regression:  
+`$$\log \left( \frac{p}{1-p} \right) = \beta_0 + \beta_1 x_1 + \beta_2 x_2$$`
+
+$$\log \left( \frac{p}{1-p} \right) = \beta_0 + \beta_1 x_1 + \beta_2 x_2$$
+
+# Citations
+
+You can specify a bibliography in a separate `.bib` file (specified in the
+header). One entry of the `.bib` file might look like this:
+
+    @book{bookdown,
+    author = "Yihui Xie",
+    title = "bookdown: Authoring Books and Technical Documents with R Markdown",
+    publisher = "Chapman and Hall",
+    year = "2021",
+    url = "https://bookdown.org/yihui/bookdown/citations.html"
+    }
+
+You can find more examples of entry types in the
+[Wikipedia article on BibTeX](https://en.wikipedia.org/wiki/BibTeX) [@bibtex],
+and a longer discussion in Xie's book [@bookdown].
+
+Citations in the text are specified with square brackets and a reference:
+`[@bookdown]`. A bibliography is generated at the end of the document,
+so it's best to end the document with an appropriate section, like
+`# References`.
+
+# Cross-References and Captions
+
+Cross-references are extremely useful, because they automatically handle
+labeling, even when the order of your document changes. References to elements
+of your paper can be inserted using the command `\@ref(label)`, where
+`label` is the name you gave that item. The label is generated in 
+different ways, depending on the type of object.
+
+You need to specify a caption in order to see your figure or table numbers.
+
+**Note:** These generic cross-references are only available if you
+use the "bookdown" output types (see the header of this document).
+
+## Figures
+
+The label for a figure is created by naming the code chunk for that figure.
+Consider the code below:
+
+````markdown
+`r ''````{r scatter, fig.cap="Comparison of horse power and miles per gallon."}
+with(mtcars, plot(x=hp, y=mpg, xlab="Horse Power", ylab="Miles per Gallon"))
+```
+````
+
+Then the figure is reference by `\@ref(fig:scatter)`:
+"Figure \@ref(fig:scatter) shows the relationship between horse power and miles
+per  gallon in the mtcars data set."
+
+```{r scatter,fig.cap="Comparison of horse power and miles per gallon."}
+with(mtcars, plot(x=hp, y=mpg, xlab="Horse Power", ylab="Miles per Gallon"))
+```
+
+Inserting an image with caption and cross-referencing, such as
+Figure \@ref(fig:smile), looks like this:
+
+![(#fig:smile) A smiley Face](images/smiley.png){width=20% fig-alt="A smiley face."}
+
+## Tables
+
+Similarly, tables are labeled if you add a chunk name
+
+````
+`r ''````{r mtcars}
+kable(head(mtcars), caption="The mtcars data frame.")
+```
+````
+
+Here you'd add `tab:` to the front of the name in referencing the table:
+`\@ref(tab:mtcars)`.  Here's what the reference looks like:
+"Table \@ref(tab:mtcars) shows the `mtcars` data frame."
+
+```{r mtcars}
+kable(head(mtcars), caption="The mtcars data frame.")
+```
+
+## Paper Sections {#sections}
+
+Paper sections are automatically named according to their actual title.
+However, this might break if you rename your sections. It's better to 
+add a specific name if you want to refer to a section. That's done by putting 
+the code `{#name}` after the section identifier. For example,
+this section was created as
+
+`## Paper Sections {#sections}`
+
+and I can refer to it using `\@ref(sections)` like this: "In Section 
+\@ref(sections) we learn how to reference sections."
+
+See @bookdown and @markdown for more information.
+
+## Without Bookdown
+
+In a plain RMarkdown file, you can get cross-references in PDF
+output by placing a `\label{name}` command where the caption is
+specified (inside the quotes) and then using `\ref{name}` to refer to it.
+These are TeX commands, and only work with PDF output. Note the curly 
+braces in the raw TeX commands.
+
+# Floating Figures
+
+By default, LaTeX produces figures that "float." They are positioned to
+fit well on the page, rather than appear precisely where they appear
+in the code. This behavior can be controlled with the `fig.pos` chunk 
+option. It can be set for each chunk or as a global setting. Here are the options:
+
+- `fig.pos="h"`: I suggest that you put the figure _here_.
+
+- `fig.pos="t"`: I suggest the top of the page.
+
+- `fig.pos="b"`: I suggest the bottom of the page
+
+- `fig.pos="p"`: Use a special float page.
+
+- `fig.pos="!h"`: I really mean it! Not a suggestion.
+
+These can be combined into a longer string to give priority to the suggestions. This template uses `fig.pos="ht"` because I like to have the figures where I put them. It's also important to set `out.extra=""` in the 
+default chunk options if you want this to work.
+
+Lastly, in a Statistics paper, figures can get "behind" because the
+system doesn't like to put too many figures on one page. If that's the 
+case, you can use the `\clearpage` command on a blank line to say
+"put all the waiting figures here before we go on."
+
+# New Page
+
+Starting a new page doesn't have meaning in HTML output, but it does in
+PDF. You can use the LaTeX `\newpage` command on a blank line to 
+start a new page. It will be ignored in other output modes.
+
+# References

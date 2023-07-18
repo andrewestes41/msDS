@@ -1,0 +1,195 @@
+---
+title: "thesis_qPoisson"
+author: "Andrew Estes"
+date: "2023-04-30"
+output: pdf_document
+---
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(pscl)
+library(lmtest)
+library(geepack)
+library(flexmix)
+library(lme4)
+library(bpr)
+library(bayesplot)
+library(tidybayes)
+library(broom.mixed)
+library(rstanarm)
+library(bayesrules)
+
+
+
+
+#importing data
+original.df <- read.csv("final_pit_only.csv")
+df <- original.df
+
+head(df)
+```
+```{r}
+cols <- c("DriverNumberCat", "CompoundCat", "FreshTyre", "Stint", "TeamCat", "Year", "DriverCat", "TrackStatusCat", "GridPosition", "Position", "RaceCat", "FreshTyreCat")
+
+df[cols] <- lapply(df[cols], factor)  ## as.factor() could also be used
+
+head(df)
+```
+
+```{r}
+#https://cran.r-project.org/web/packages/pscl/vignettes/countreg.pdf
+library(sandwich)
+
+
+pois <- glm(LapNumber ~ ., data = df, family = poisson)
+summary(pois)
+coeftest(pois, vcov = sandwich) #inference function wald test; sandwich covariance matrix estimator
+
+qpois <- glm(LapNumber ~ ., data = df, family = quasipoisson)
+summary(qpois)
+
+nbin <- MASS::glm.nb(LapNumber ~ ., data = df)
+summary(nbin)
+
+#cannot do hurdle or zip to to non-zero minimum count
+
+```
+
+
+```{r}
+
+
+m.ex <- geeglm(LapNumber ~ ., 
+               data = df, 
+               id = interaction(cols, ),
+               family = poisson, 
+               corstr = "exchangeable")
+
+flex <- flexmix(LapNumber ~ ., 
+                data = df, 
+                k = 19,
+                model = FLXMRglm(family = "poisson"))
+```
+
+```{r}
+
+fit_bpr <- sample_bpr(LapNumber ~ ., data = df, iter=100000)
+
+#Running MH sampler with a gaussian prior distribution.
+#Chains initialized at the maximum likelihood estimates.
+#Error: copy into submatrix: incompatible matrix dimensions: 236x1 and 165x1
+#https://cran.r-project.org/web/packages/bpr/bpr.pdf
+```
+
+```{r}
+
+ggplot(df, aes(x = LapNumber)) + 
+  geom_histogram(color = "white", breaks = seq(0, 100, by = 10))
+
+# Simulate the Normal model
+equality_normal_sim <- stan_glm(LapNumber ~ ., 
+                                data = df,  
+                                family = gaussian,
+                                prior_intercept = normal(7, 1.5),
+                                prior = normal(0, 2.5, autoscale = TRUE),
+                                prior_aux = exponential(1, autoscale = TRUE),
+                                chains = 4, iter = 2 * 1000, seed = 84735)
+
+# Posterior predictive check
+pp_check(equality_normal_sim, plotfun = "hist", nreps = 5) + 
+  geom_vline(xintercept = 0) + 
+  xlab("laws")
+pp_check
+
+equality_model_prior <- stan_glm(LapNumber ~ ., 
+                                 data = df, 
+                                 family = poisson,
+                                 prior_intercept = normal(2, 0.5),
+                                 prior = normal(0, 2.5, autoscale = TRUE), 
+                                 chains = 4, iter = 2 * 1000, seed = 84735, 
+                                 prior_PD = TRUE)
+
+#https://www.bayesrulesbook.com/chapter-12.html
+
+prior_summary(equality_model_prior)
+
+#df %>% 
+##  add_fitted_draws(equality_model_prior, n = 100) %>%
+#  ggplot(aes(x = TyreLife, y = LapNumber, color = TeamCat)) +
+#    geom_line(aes(y = .value, group = paste(historical, .draw))) + 
+#    ylim(0, 100)
+
+equality_model <- update(equality_model_prior, prior_PD = FALSE)
+
+
+#checking predictive power
+mcmc_trace(equality_model)
+mcmc_dens_overlay(equality_model)
+mcmc_acf(equality_model)
+
+set.seed(1)
+pp_check(equality_model, plotfun = "hist", nreps = 5) + 
+  xlab("laws")
+pp_check(equality_model) + 
+  xlab("laws")
+
+#df %>%
+#  add_fitted_draws(equality_model, n = 50) %>%
+#  ggplot(aes(x = TyreLife, y = LapNumber, color = Team)) +
+#    geom_line(aes(y = .value, group = paste(historical, .draw)), 
+#              alpha = .1) +
+#    geom_point(data = df, size = 0.1)
+
+tidy(equality_model, conf.int = TRUE, conf.level = 0.80)
+
+
+# Simulate posterior predictive models for each state
+set.seed(84735)
+poisson_predictions <- posterior_predict(equality_model, newdata = df)
+
+# Plot the posterior predictive models for each state
+ppc_intervals_grouped(df$LapNumber, yrep = poisson_predictions, 
+                      x = df$TyreLife, 
+                      group = df$RACE,
+                      prob = 0.5, prob_outer = 0.95,
+                      facet_args = list(scales = "fixed"))
+
+prediction_summary(equality_model, df)
+
+set.seed(84735)
+poisson_cv <- prediction_summary_cv(model = equality._model, 
+                                    data = df, k = 10)
+poisson_cv$cv
+```
+
+```{r}
+#https://www.bayesrulesbook.com/chapter-12.html
+
+df %>% 
+  group_by(cut(TyreLife,3), FreshTyre) %>% 
+  summarize(mean = mean(LapNumber), var = var(LapNumber))
+
+books_negbin_sim <- stan_glm(
+  LapNumber ~ ., 
+  data = df, family = neg_binomial_2,
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_aux = exponential(1, autoscale = TRUE),
+  chains = 4, iter = 2 * 1000, seed = 84735)
+
+# Check out the priors
+prior_summary(books_negbin_sim)
+
+pp_check(books_negbin_sim) + 
+  xlim(0, 75) + 
+  xlab("books")
+
+tidy(books_negbin_sim, conf.int = TRUE, conf.level = 0.80)
+
+```
+
+
+
+
