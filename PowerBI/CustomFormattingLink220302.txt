@@ -1,0 +1,1 @@
+For more about custom format strings in Power BI Desktop, please go to https://docs.microsoft.com/en-us/power-bi/create-reports/desktop-custom-format-strings
